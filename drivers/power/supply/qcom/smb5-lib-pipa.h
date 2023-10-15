@@ -590,7 +590,6 @@ struct smb_charger {
 	u32			sdam_base;
 	bool			pd_not_supported;
 	bool			batt_verified;
-        int                     fake_shipmode;
 	/* locks */
 	struct mutex		smb_lock;
 	struct mutex		ps_change_lock;
@@ -627,9 +626,6 @@ struct smb_charger {
 	enum power_supply_type		wireless_charger_type;
 	enum power_supply_type		quick_charge_type_info;
 
-	/* notifiers */
-	struct notifier_block	nb;
-        struct  notifier_block reboot_notifier;
 	/* parallel charging */
 	struct parallel_params	pl;
 	int smartBatVal;
