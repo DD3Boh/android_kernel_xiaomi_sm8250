@@ -46,6 +46,7 @@
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
+#define IDLE_TIMEOUT_DEFAULT (1100)
 
 struct sde_crtc_custom_events {
 	u32 event;
@@ -3285,6 +3286,7 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct sde_crtc_state *cstate;
 	struct sde_kms *sde_kms;
 	int idle_time = 0;
+	static bool idle_time_enable = false;
 
 	if (!crtc || !crtc->dev || !crtc->dev->dev_private) {
 		SDE_ERROR("invalid crtc\n");
@@ -3322,6 +3324,11 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 
 	event_thread = &priv->event_thread[crtc->index];
 	idle_time = sde_crtc_get_property(cstate, CRTC_PROP_IDLE_TIMEOUT);
+	if (!idle_time && idle_time_enable) {
+		idle_time = IDLE_TIMEOUT_DEFAULT;
+		idle_time_enable = false;
+	} else
+		idle_time_enable = true;
 
 	/*
 	 * If no mixers has been allocated in sde_crtc_atomic_check(),
@@ -6889,5 +6896,5 @@ uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate)
 	if (!cstate)
 		return 0;
 
-	return sde_crtc_get_property(cstate, CRTC_PROP_MI_FOD_SYNC_INFO);
+	return sde_crtc_get_property(cstate, CRTC_PROP_MI_FOD_SYNC_INFO);;
 }
