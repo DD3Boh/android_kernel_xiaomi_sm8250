@@ -281,6 +281,7 @@ static int set_dspp_pcc_feature(struct sde_hw_dspp *hw_dspp,
 {
 	int ret = 0;
 	struct drm_msm_pcc *pcc_cfg;
+	DRM_INFO("layer_flag %d %d\n", hw_crtc->mi_dimlayer_type, hw_cfg->mi_dimlayer_type);
 
 	if (!hw_dspp || !hw_dspp->ops.setup_pcc)
 		ret = -EINVAL;
@@ -1995,6 +1996,7 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 
 	if (!pcc_info.initialized) {
 		pcc_info.crtc_id = crtc->base.id;
+		DRM_INFO("save primary crtc_id = %d\n", crtc->base.id);
 		pcc_info.initialized = true;
 	}
 
@@ -2009,10 +2011,18 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 		return -EINVAL;
 	}
 
+	if (!strncmp(property->name, "mi_fod_sync_info", sizeof("mi_fod_sync_info")) ||
+		!strncmp(property->name, "SDE_DSPP_PCC_V4", sizeof("SDE_DSPP_PCC_V4"))) {
+		pr_debug("prop_name=%s prop_id=%d prop_val=%llu, crtc_name=%s crtc_id=%d\n",
+			property->name, property->base.id, val, sde_crtc->name, crtc->base.id);
+	}
+
 	if (!strncmp(property->name, "mi_fod_sync_info", sizeof("mi_fod_sync_info"))
 		&& pcc_info.crtc_id == crtc->base.id) {
 		if ((val & MI_DIMLAYER_FOD_HBM_OVERLAY) != (pcc_info.fod_val & MI_DIMLAYER_FOD_HBM_OVERLAY)) {
 			fod_changed = true;
+			DRM_INFO("mi_fod_sync_info changed, prop_id = %d, hbm_overlay = %d\n",
+					property->base.id, val & MI_DIMLAYER_FOD_HBM_OVERLAY);
 		}
 		pcc_info.fod_val = val;
 	}
@@ -2094,8 +2104,10 @@ int sde_cp_crtc_set_property(struct drm_crtc *crtc,
 		ret = sde_cp_disable_crtc_property(crtc, property, prop_node);
 	} else {
 		if (fod_changed) {
+			DRM_INFO("pcc_property enable\n");
 			ret = sde_cp_enable_crtc_property(crtc, &pcc_info.pcc_property,
 							  prop_node, pcc_info.pcc_val);
+
 		} else {
 			ret = sde_cp_enable_crtc_property(crtc, property,
 						  prop_node, val);
@@ -2504,6 +2516,11 @@ static void dspp_ltm_install_property(struct drm_crtc *crtc)
 	}
 
 	ltm_sw_fuse = sde_hw_get_ltm_sw_fuse_value(kms->hw_sw_fuse);
+	DRM_DEBUG_DRIVER("ltm_sw_fuse value: 0x%x\n", ltm_sw_fuse);
+	if (ltm_sw_fuse != SW_FUSE_ENABLE) {
+		pr_info("ltm_sw_fuse is not enabled: 0x%x\n", ltm_sw_fuse);
+	}
+
 	catalog = kms->catalog;
 	version = catalog->dspp[0].sblk->ltm.version >> 16;
 	snprintf(feature_name, ARRAY_SIZE(feature_name), "%s%d",
@@ -3103,7 +3120,7 @@ static void sde_cp_notify_hist_event(struct drm_crtc *crtc_drm, void *arg)
 	u32 i, lock_hist = 0;
 
 	if (!crtc_drm || !arg) {
-		DRM_ERROR("invalid crtc %pK\n", crtc_drm);
+		DRM_ERROR("invalid drm crtc %pK or arg %pK\n", crtc_drm, arg);
 		return;
 	}
 
