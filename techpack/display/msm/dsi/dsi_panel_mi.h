@@ -290,11 +290,6 @@ struct dsi_panel_mi_cfg {
 	uint32_t brightnes_alpha_lut_item_count;
 	brightness_alpha *brightness_alpha_lut;
 
-	/* smart fps control */
-	bool smart_fps_support;
-	bool smart_fps_restore;
-	u32 smart_fps_max_framerate;
-	u32 smart_fps_value;
 	u32 idle_fps;
 	struct lockdowninfo_cfg lockdowninfo_read;
 	bool idle_mode_flag;

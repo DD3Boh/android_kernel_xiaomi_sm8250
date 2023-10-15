@@ -17,7 +17,6 @@
 #include "dsi_parser.h"
 #include "dsi_mi_feature.h"
 #include "dsi_display.h"
-#include "xiaomi_frame_stat.h"
 #include "sde_dbg.h"
 #include "dsi_mi_feature.h"
 
@@ -39,7 +38,6 @@
 #define DEFAULT_PANEL_PREFILL_LINES	25
 #define MIN_PREFILL_LINES      35
 
-extern struct frame_stat fm_stat;
 extern void sde_crtc_fod_ui_ready(struct dsi_display *display, int type, int value);
 
 enum dsi_dsc_ratio_type {
@@ -4826,9 +4824,6 @@ exit_skip:
 	mi_cfg->layer_fod_unlock_success = false;
 	mi_cfg->sysfs_fod_unlock_success = false;
 	mi_cfg->fod_to_nolp = false;
-	fm_stat.idle_status = false;
-
-
 exit:
 	mutex_unlock(&panel->panel_lock);
 	display_utc_time_marker("DSI_CMD_SET_NOLP");
@@ -5253,7 +5248,6 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	mi_cfg->doze_brightness_state = DOZE_TO_NORMAL;
 	mi_cfg->into_aod_pending = false;
 	mi_cfg->cabc_current_status = 0;
-	fm_stat.idle_status = false;
 
 	mutex_unlock(&panel->panel_lock);
 	display_utc_time_marker("DSI_CMD_SET_ON");

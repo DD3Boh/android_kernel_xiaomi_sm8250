@@ -27,7 +27,6 @@
 #include "dsi_parser.h"
 #include "dsi_mi_feature.h"
 #include "../../../../kernel/irq/internals.h"
-#include "xiaomi_frame_stat.h"
 #include "mi_disp_nvt_alpha_data.h"
 #include "mi_disp_lhbm.h"
 
@@ -36,7 +35,6 @@
 
 extern ssize_t mipi_dsi_dcs_write(struct mipi_dsi_device *dsi, u8 cmd, const void *data, size_t len);
 
-extern struct frame_stat fm_stat;
 static struct dsi_read_config g_dsi_read_cfg;
 struct dsi_panel *g_panel;
 static struct dsi_panel_cmd_set gamma_cmd_set[DSI_CMD_SET_MI_GAMMA_SWITCH_MAX];
@@ -300,45 +298,6 @@ static int dsi_panel_parse_white_point_config(struct dsi_panel *panel,
 			&mi_cfg->wp_info_len);
 	if (rc)
 		pr_info("failed to get mi,mdss-dsi-white-point-info-length\n");
-
-	return rc;
-}
-
-static int dsi_panel_parse_smart_fps_config(struct dsi_panel *panel,
-				struct device_node *of_node)
-{
-	int rc = 0;
-	struct dsi_parser_utils *utils = &panel->utils;
-	struct dsi_panel_mi_cfg *mi_cfg = &panel->mi_cfg;
-
-	mi_cfg->idle_mode_flag = true;
-
-	mi_cfg->smart_fps_support = utils->read_bool(of_node,
-			"mi,mdss-dsi-pan-enable-smart-fps");
-
-	if (mi_cfg->smart_fps_support) {
-		pr_info("smart fps is supported\n");
-
-		if (panel->dfps_caps.dfps_list_len > 1)
-			mi_cfg->smart_fps_max_framerate = panel->dfps_caps.max_refresh_rate;
-		else {
-			rc = utils->read_u32(of_node,
-					"mi,mdss-dsi-smart-fps-max_framerate", &mi_cfg->smart_fps_max_framerate);
-			if (rc) {
-				mi_cfg->smart_fps_max_framerate = 60;
-				pr_info("mi,mdss-dsi-smart-fps-max_framerate not defined\n");
-			} else
-				pr_info("smart fps max framerate is %d\n", mi_cfg->smart_fps_max_framerate);
-		}
-	}
-
-	rc = utils->read_u32(of_node,
-			"mi,mdss-panel-idle-fps", &mi_cfg->idle_fps);
-	if (rc) {
-		mi_cfg->idle_fps = 0;
-		pr_info("mi,mdss-panel-idle-fps not defined\n");
-	} else
-		pr_info("idle fps is %d\n", mi_cfg->idle_fps);
 
 	return rc;
 }
@@ -854,10 +813,6 @@ skip_dimlayer_parse:
 			pr_info("mi,mdss-dsi-panel-fod-on-b2-index not defined\n");
 		}
 	}
-
-	rc = dsi_panel_parse_smart_fps_config(panel, of_node);
-	if (rc)
-		DSI_INFO("failed to parse smart fps configuration, rc=%d\n", rc);
 
 	mi_cfg->is_tddi_flag = utils->read_bool(of_node,
 			"mi,is-tddi-flag");
@@ -3960,12 +3915,6 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 		}
 	}
 
-	/* set smart fps status */
-	if (param & 0xF0000000) {
-		fm_stat.enabled = param & 0x01;
-		pr_info("smart dfps enable = [%d]\n", fm_stat.enabled);
-	}
-
 	temp = param & 0x000000F0;
 	switch (temp) {
 	case DISPPARAM_CE_ON:
@@ -4625,34 +4574,6 @@ int dsi_panel_set_disp_param(struct dsi_panel *panel, u32 param)
 
 	temp = param & 0xF0000000;
 	switch (temp) {
-	case DISPPARAM_DFPS_LEVEL1:
-		DSI_INFO("DFPS:30fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
-	case DISPPARAM_DFPS_LEVEL2:
-		DSI_INFO("DFPS:48fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
-	case DISPPARAM_DFPS_LEVEL3:
-		DSI_INFO("DFPS:50fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
-	case DISPPARAM_DFPS_LEVEL4:
-		DSI_INFO("DFPS:60fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
-	case DISPPARAM_DFPS_LEVEL5:
-		DSI_INFO("DFPS:90fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
-	case DISPPARAM_DFPS_LEVEL6:
-		DSI_INFO("DFPS:120fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
-	case DISPPARAM_DFPS_LEVEL7:
-		DSI_INFO("DFPS:144fps\n");
-		panel->mi_cfg.smart_fps_restore = true;
-		break;
 	case DISPPARAM_GIR_ON:
 		if (panel->mi_cfg.panel_id == 0x4C334100420200 && panel->mi_cfg.in_aod) {
 			DSI_INFO("In AOD, skip gir on \n");

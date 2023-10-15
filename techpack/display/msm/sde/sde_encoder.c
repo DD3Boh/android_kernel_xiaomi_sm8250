@@ -43,7 +43,6 @@
 #include "dsi_display.h"
 #include "dsi_panel_mi.h"
 #include "dsi_drm.h"
-#include "xiaomi_frame_stat.h"
 
 #define SDE_DEBUG_ENC(e, fmt, ...) SDE_DEBUG("enc%d " fmt,\
 		(e) ? (e)->base.base.id : -1, ##__VA_ARGS__)
@@ -90,7 +89,6 @@
 		(msm_is_mode_seamless_dms(adj_mode) || \
 		(msm_is_mode_seamless_dyn_clk(adj_mode) && \
 		is_cmd_mode) || msm_is_mode_seamless_poms(adj_mode))
-extern struct frame_stat fm_stat;
 
 /**
  * enum sde_enc_rc_events - events for resource control state machine
@@ -2355,8 +2353,6 @@ static void sde_encoder_input_event_handler(struct input_handle *handle,
 		SDE_ERROR("invalid encoder for the input event\n");
 		return;
 	}
-
-	SDE_DEBUG("%s: type[%d] code[%d] value[%d]\n", __func__, type, code, value);
 
 	drm_enc = (struct drm_encoder *)handle->handler->private;
 	if (!drm_enc->dev || !drm_enc->dev->dev_private) {
@@ -4737,14 +4733,6 @@ static void sde_encoder_touch_notify_work_handler(struct kthread_work *work)
 	c_bridge = container_of(drm_enc->bridge, struct dsi_bridge, base);
 	if (c_bridge)
 		dsi_display = c_bridge->display;
-
-	if (dsi_display && dsi_display->is_prim_display && dsi_display->panel
-		&& dsi_display->panel->mi_cfg.smart_fps_restore) {
-		if (dsi_display->panel->mi_cfg.smart_fps_support && fm_stat.enabled) {
-			calc_fps(0, (int)true);
-			dsi_display->panel->mi_cfg.smart_fps_restore = false;
-		}
-	}
 }
 
 static void sde_encoder_vsync_event_work_handler(struct kthread_work *work)

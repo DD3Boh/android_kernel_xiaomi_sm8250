@@ -400,28 +400,6 @@ int dsi_display_esd_irq_ctrl(struct dsi_display *display,
 	return rc;
 }
 
-ssize_t complete_commit_time_get(struct drm_connector *connector, char *buf)
-{
-	struct dsi_display *dsi_display = NULL;
-	struct dsi_bridge *c_bridge;
-	struct msm_drm_private *priv = NULL;
-
-	if ((connector == NULL) || (connector->encoder == NULL)
-			|| (connector->encoder->bridge == NULL))
-		return 0;
-
-	c_bridge =  to_dsi_bridge(connector->encoder->bridge);
-	dsi_display = c_bridge->display;
-
-	if ((dsi_display == NULL) || (dsi_display->panel == NULL))
-		return -EINVAL;
-
-	priv = dsi_display->drm_dev->dev_private;
-
-	return snprintf(buf, PAGE_SIZE, "%lld\n", priv->complete_commit_time);
-
-}
-
 int dsi_display_set_thermal_hbm_disabled(struct drm_connector *connector,
 			bool thermal_hbm_disabled)
 {
