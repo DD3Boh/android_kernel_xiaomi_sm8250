@@ -230,6 +230,7 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	notify_data.id = MSM_DRM_PRIMARY_DISPLAY;
 	mi_drm_notifier_call_chain(MI_DRM_EARLY_EVENT_BLANK, &notify_data);
 
+
 	if (c_bridge->dsi_mode.dsi_mode_flags &
 		(DSI_MODE_FLAG_SEAMLESS | DSI_MODE_FLAG_VRR |
 		 DSI_MODE_FLAG_DYN_CLK)) {
@@ -262,8 +263,10 @@ static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 	if (rc)
 		DSI_ERR("Continuous splash pipeline cleanup failed, rc=%d\n",
 									rc);
+
 	if (c_bridge->display->is_prim_display)
 		atomic_set(&prim_panel_is_on, true);
+
 }
 
 static void dsi_bridge_enable(struct drm_bridge *bridge)
@@ -401,8 +404,10 @@ static void dsi_bridge_post_disable(struct drm_bridge *bridge)
 
 	mi_drm_notifier_call_chain(MI_DRM_EVENT_BLANK, &notify_data);
 	SDE_ATRACE_END("dsi_bridge_post_disable");
+
 	if (c_bridge->display->is_prim_display)
 		atomic_set(&prim_panel_is_on, false);
+
 }
 
 static void prim_panel_off_delayed_work(struct work_struct *work)
@@ -415,7 +420,7 @@ static void prim_panel_off_delayed_work(struct work_struct *work)
 		return;
 	}
 	mutex_unlock(&gbridge->base.lock);
-} // git
+}
 
 static void dsi_bridge_mode_set(struct drm_bridge *bridge,
 				struct drm_display_mode *mode,
@@ -1123,7 +1128,6 @@ int dsi_conn_post_kickoff(struct drm_connector *connector,
 				return -EINVAL;
 			}
 		}
-
 		c_bridge->dsi_mode.dsi_mode_flags &= ~DSI_MODE_FLAG_VRR;
 	}
 

@@ -46,6 +46,7 @@
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
+#define IDLE_TIMEOUT_DEFAULT (1100)
 
 struct sde_crtc_custom_events {
 	u32 event;
@@ -3285,6 +3286,7 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct sde_crtc_state *cstate;
 	struct sde_kms *sde_kms;
 	int idle_time = 0;
+	static bool idle_time_enable = false;
 
 	if (!crtc || !crtc->dev || !crtc->dev->dev_private) {
 		SDE_ERROR("invalid crtc\n");
@@ -3322,6 +3324,11 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 
 	event_thread = &priv->event_thread[crtc->index];
 	idle_time = sde_crtc_get_property(cstate, CRTC_PROP_IDLE_TIMEOUT);
+	if (!idle_time && idle_time_enable) {
+		idle_time = IDLE_TIMEOUT_DEFAULT;
+		idle_time_enable = false;
+	} else
+		idle_time_enable = true;
 
 	/*
 	 * If no mixers has been allocated in sde_crtc_atomic_check(),
@@ -3353,16 +3360,6 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 
 	/* wait for acquire fences before anything else is done */
 	_sde_crtc_wait_for_fences(crtc);
-
-	/* schedule the idle notify delayed work */
-	if (idle_time && sde_encoder_check_curr_mode(
-						sde_crtc->mixers[0].encoder,
-						MSM_DISPLAY_VIDEO_MODE)) {
-		kthread_queue_delayed_work(&event_thread->worker,
-					&sde_crtc->idle_notify_work,
-					msecs_to_jiffies(idle_time));
-		SDE_DEBUG("schedule idle notify work in %dms\n", idle_time);
-	}
 
 	if (!cstate->rsc_update) {
 		drm_for_each_encoder_mask(encoder, dev,
@@ -6521,7 +6518,6 @@ static void __sde_crtc_idle_notify_work(struct kthread_work *work)
 		event.length = sizeof(u32);
 		msm_mode_object_event_notify(&crtc->base, crtc->dev,
 				&event, (u8 *)&ret);
-
 		SDE_DEBUG("crtc[%d]: idle timeout notified\n", crtc->base.id);
 	}
 }
@@ -6849,6 +6845,14 @@ static int sde_crtc_idle_interrupt_handler(struct drm_crtc *crtc_drm,
 	return 0;
 }
 
+uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate)
+{
+	if (!cstate)
+		return 0;
+
+	return sde_crtc_get_property(cstate, CRTC_PROP_MI_FOD_SYNC_INFO);;
+}
+
 /**
  * sde_crtc_update_cont_splash_settings - update mixer settings
  *	and initial clk during device bootup for cont_splash use case
@@ -6882,12 +6886,4 @@ void sde_crtc_update_cont_splash_settings(struct drm_crtc *crtc)
 	sde_crtc->cur_perf.core_clk_rate = (rate > 0) ?
 					rate : kms->perf.max_core_clk_rate;
 	sde_crtc->cur_perf.core_clk_rate = kms->perf.max_core_clk_rate;
-}
-
-uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate)
-{
-	if (!cstate)
-		return 0;
-
-	return sde_crtc_get_property(cstate, CRTC_PROP_MI_FOD_SYNC_INFO);
 }
