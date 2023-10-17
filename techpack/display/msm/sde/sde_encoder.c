@@ -43,7 +43,6 @@
 #include "dsi_display.h"
 #include "dsi_panel_mi.h"
 #include "dsi_drm.h"
-#include "xiaomi_frame_stat.h"
 
 #define SDE_DEBUG_ENC(e, fmt, ...) SDE_DEBUG("enc%d " fmt,\
 		(e) ? (e)->base.base.id : -1, ##__VA_ARGS__)
@@ -62,6 +61,7 @@
 		(p) ? (p)->intf_idx - INTF_0 : -1, \
 		(p) ? ((p)->hw_pp ? (p)->hw_pp->idx - PINGPONG_0 : -1) : -1, \
 		##__VA_ARGS__)
+
 /*
  * Two to anticipate panels that can do cmd/vid dynamic switching
  * plan is to create all possible physical encoder types, and switch between
@@ -90,7 +90,6 @@
 		(msm_is_mode_seamless_dms(adj_mode) || \
 		(msm_is_mode_seamless_dyn_clk(adj_mode) && \
 		is_cmd_mode) || msm_is_mode_seamless_poms(adj_mode))
-extern struct frame_stat fm_stat;
 
 /**
  * enum sde_enc_rc_events - events for resource control state machine
@@ -2356,8 +2355,6 @@ static void sde_encoder_input_event_handler(struct input_handle *handle,
 		return;
 	}
 
-	SDE_DEBUG("%s: type[%d] code[%d] value[%d]\n", __func__, type, code, value);
-
 	drm_enc = (struct drm_encoder *)handle->handler->private;
 	if (!drm_enc->dev || !drm_enc->dev->dev_private) {
 		SDE_ERROR("invalid parameters\n");
@@ -3194,8 +3191,6 @@ static int _sde_encoder_input_connect(struct input_handler *handler,
 		goto error_unregister;
 	}
 
-	SDE_EVT32(handle, SDE_EVTLOG_FUNC_ENTRY);
-
 	return 0;
 
 error_unregister:
@@ -3209,7 +3204,6 @@ error:
 
 static void _sde_encoder_input_disconnect(struct input_handle *handle)
 {
-	SDE_EVT32(handle, SDE_EVTLOG_FUNC_EXIT);
 	input_close_device(handle);
 	input_unregister_handle(handle);
 	kfree(handle);
@@ -3811,7 +3805,6 @@ static void sde_encoder_underrun_callback(struct drm_encoder *drm_enc,
 		atomic_read(&phy_enc->underrun_cnt));
 
 	SDE_DBG_CTRL("stop_ftrace");
-	SDE_ERROR("underrun: %d\n", atomic_read(&phy_enc->underrun_cnt));
 	SDE_DBG_CTRL("panic_underrun");
 
 	SDE_ATRACE_END("encoder_underrun_callback");
@@ -4737,14 +4730,6 @@ static void sde_encoder_touch_notify_work_handler(struct kthread_work *work)
 	c_bridge = container_of(drm_enc->bridge, struct dsi_bridge, base);
 	if (c_bridge)
 		dsi_display = c_bridge->display;
-
-	if (dsi_display && dsi_display->is_prim_display && dsi_display->panel
-		&& dsi_display->panel->mi_cfg.smart_fps_restore) {
-		if (dsi_display->panel->mi_cfg.smart_fps_support && fm_stat.enabled) {
-			calc_fps(0, (int)true);
-			dsi_display->panel->mi_cfg.smart_fps_restore = false;
-		}
-	}
 }
 
 static void sde_encoder_vsync_event_work_handler(struct kthread_work *work)

@@ -43,7 +43,6 @@
 #include "sde_core_perf.h"
 #include "sde_trace.h"
 #include "dsi_display.h"
-#include "xiaomi_frame_stat.h"
 
 #define SDE_PSTATES_MAX (SDE_STAGE_MAX * 4)
 #define SDE_MULTIRECT_PLANE_MAX (SDE_STAGE_MAX * 2)
@@ -54,8 +53,6 @@ struct sde_crtc_custom_events {
 	int (*func)(struct drm_crtc *crtc, bool en,
 			struct sde_irq_callback *irq);
 };
-
-extern struct frame_stat fm_stat;
 
 static int sde_crtc_power_interrupt_handler(struct drm_crtc *crtc_drm,
 	bool en, struct sde_irq_callback *ad_irq);
@@ -2454,13 +2451,11 @@ static void sde_crtc_frame_event_work(struct kthread_work *work)
 		SDE_ATRACE_END("signal_release_fence");
 	}
 
-	if (fevent->event & SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE) {
+	if (fevent->event & SDE_ENCODER_FRAME_EVENT_SIGNAL_RETIRE_FENCE)
 		/* this api should be called without spin_lock */
 		_sde_crtc_retire_event(fevent->connector, fevent->ts,
 				(fevent->event & SDE_ENCODER_FRAME_EVENT_ERROR)
 				? SDE_FENCE_SIGNAL_ERROR : SDE_FENCE_SIGNAL);
-		frame_stat_collector(0, RETIRE_FENCE_TS);
-	}
 
 	if (fevent->event & SDE_ENCODER_FRAME_EVENT_PANEL_DEAD)
 		SDE_ERROR("crtc%d ts:%lld received panel dead event\n",
@@ -3237,23 +3232,11 @@ static void sde_crtc_atomic_begin(struct drm_crtc *crtc,
 	_sde_crtc_blend_setup(crtc, old_state, true);
 	_sde_crtc_dest_scaler_setup(crtc);
 
-	if (g_panel->mi_cfg.smart_fps_support
-		&& sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
-					MSM_DISPLAY_CMD_MODE) &&
-		kthread_cancel_delayed_work_sync(&sde_crtc->idle_notify_work_cmd_mode)) {
-		pr_debug("idle notify work cancelled");
-	}
-
 	/* cancel the idle notify delayed work */
-	if ((g_panel->mi_cfg.panel_id != 0x4D38324100360200) &&
-		(g_panel->mi_cfg.panel_id != 0x4D38324100420200) &&
-		sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
+	if (sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
 					MSM_DISPLAY_VIDEO_MODE) &&
-		kthread_cancel_delayed_work_sync(&sde_crtc->idle_notify_work)) {
+		kthread_cancel_delayed_work_sync(&sde_crtc->idle_notify_work))
 		SDE_DEBUG("idle notify work cancelled\n");
-	}
-
-	fm_stat.idle_status = false;
 
 	/*
 	 * Since CP properties use AXI buffer to program the
@@ -3304,9 +3287,6 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	struct sde_kms *sde_kms;
 	int idle_time = 0;
 	static bool idle_time_enable = false;
-	ktime_t get_input_fence_ts;
-	ktime_t now;
-	s64 duration;
 
 	if (!crtc || !crtc->dev || !crtc->dev->dev_private) {
 		SDE_ERROR("invalid crtc\n");
@@ -3379,26 +3359,10 @@ static void sde_crtc_atomic_flush(struct drm_crtc *crtc,
 	}
 
 	/* wait for acquire fences before anything else is done */
-	now = ktime_get();
 	_sde_crtc_wait_for_fences(crtc);
-	get_input_fence_ts = ktime_get();
-	duration = ktime_to_ns(ktime_sub(get_input_fence_ts, now));
-	frame_stat_collector(duration, GET_INPUT_FENCE_TS);
-
-	if(g_panel->mi_cfg.smart_fps_support
-		&& sde_encoder_check_curr_mode(sde_crtc->mixers[0].encoder,
-							MSM_DISPLAY_CMD_MODE)) {
-		kthread_queue_delayed_work(&event_thread->worker,
-					&sde_crtc->idle_notify_work_cmd_mode,
-					msecs_to_jiffies(IDLE_TIMEOUT_DEFAULT));
-		pr_debug("schedule idle notify work\n");
-	}
 
 	/* schedule the idle notify delayed work */
-	if ((g_panel->mi_cfg.panel_id != 0x4D38324100360200) &&
-		(g_panel->mi_cfg.panel_id != 0x4D38324100420200) &&
-		g_panel->mi_cfg.idle_mode_flag && idle_time
-		&& sde_encoder_check_curr_mode(
+	if (idle_time && sde_encoder_check_curr_mode(
 						sde_crtc->mixers[0].encoder,
 						MSM_DISPLAY_VIDEO_MODE)) {
 		kthread_queue_delayed_work(&event_thread->worker,
@@ -5377,7 +5341,7 @@ static void sde_crtc_install_properties(struct drm_crtc *crtc,
 
 	/* mi properties */
 	msm_property_install_range(&sde_crtc->property_info, "mi_fod_sync_info",
-		0x0, 0, U32_MAX, 0, CRCT_PROP_MI_FOD_SYNC_INFO);
+		0x0, 0, U32_MAX, 0, CRTC_PROP_MI_FOD_SYNC_INFO);
 
 	/* range properties */
 	msm_property_install_range(&sde_crtc->property_info,
@@ -6564,22 +6528,8 @@ static void __sde_crtc_idle_notify_work(struct kthread_work *work)
 		event.length = sizeof(u32);
 		msm_mode_object_event_notify(&crtc->base, crtc->dev,
 				&event, (u8 *)&ret);
-		fm_stat.idle_status = true;
+
 		SDE_DEBUG("crtc[%d]: idle timeout notified\n", crtc->base.id);
-	}
-}
-
-static void __sde_crtc_idle_notify_work_cmd_mode(struct kthread_work *work)
-{
-	struct sde_crtc *sde_crtc = container_of(work, struct sde_crtc,
-				idle_notify_work_cmd_mode.work);
-
-	if (!sde_crtc) {
-		SDE_ERROR("invalid sde crtc\n");
-	} else {
-		fm_stat.idle_status = true;
-		calc_fps(0,0);
-		pr_debug("idle timeout notified cmd mode\n");
 	}
 }
 
@@ -6675,8 +6625,6 @@ struct drm_crtc *sde_crtc_init(struct drm_device *dev, struct drm_plane *plane)
 
 	kthread_init_delayed_work(&sde_crtc->idle_notify_work,
 					__sde_crtc_idle_notify_work);
-	kthread_init_delayed_work(&sde_crtc->idle_notify_work_cmd_mode,
-					__sde_crtc_idle_notify_work_cmd_mode);
 
 	SDE_DEBUG("crtc=%d new_llcc=%d, old_llcc=%d\n",
 		crtc->base.id,
@@ -6908,14 +6856,6 @@ static int sde_crtc_idle_interrupt_handler(struct drm_crtc *crtc_drm,
 	return 0;
 }
 
-uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate)
-{
-	if (!cstate)
-		return 0;
-
-	return sde_crtc_get_property(cstate, CRCT_PROP_MI_FOD_SYNC_INFO);;
-}
-
 /**
  * sde_crtc_update_cont_splash_settings - update mixer settings
  *	and initial clk during device bootup for cont_splash use case
@@ -6949,4 +6889,12 @@ void sde_crtc_update_cont_splash_settings(struct drm_crtc *crtc)
 	sde_crtc->cur_perf.core_clk_rate = (rate > 0) ?
 					rate : kms->perf.max_core_clk_rate;
 	sde_crtc->cur_perf.core_clk_rate = kms->perf.max_core_clk_rate;
+}
+
+uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate)
+{
+	if (!cstate)
+		return 0;
+
+	return sde_crtc_get_property(cstate, CRTC_PROP_MI_FOD_SYNC_INFO);
 }

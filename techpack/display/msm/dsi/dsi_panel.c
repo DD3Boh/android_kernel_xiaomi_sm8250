@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
@@ -16,8 +15,8 @@
 #include "dsi_ctrl_hw.h"
 #include "dsi_parser.h"
 #include "dsi_mi_feature.h"
+
 #include "dsi_display.h"
-#include "xiaomi_frame_stat.h"
 #include "sde_dbg.h"
 #include "dsi_mi_feature.h"
 
@@ -39,7 +38,6 @@
 #define DEFAULT_PANEL_PREFILL_LINES	25
 #define MIN_PREFILL_LINES      35
 
-extern struct frame_stat fm_stat;
 extern void sde_crtc_fod_ui_ready(struct dsi_display *display, int type, int value);
 
 enum dsi_dsc_ratio_type {
@@ -591,7 +589,8 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	} else {
 		rc = dsi_pwr_enable_regulator(&panel->power_info, false);
 		if (rc)
-			pr_err("[%s] failed to enable vregs, rc=%d\n", panel->name, rc);
+			DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
+					panel->name, rc);
 	}
 
 	return rc;
@@ -617,7 +616,7 @@ int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 	count = mode->priv_info->cmd_sets[type].count;
 	state = mode->priv_info->cmd_sets[type].state;
 	SDE_EVT32(type, state, count);
-	DSI_INFO("dsi_panel_tx_cmd_set cmds(%d)\n", type);
+
 	if (count == 0) {
 		DSI_DEBUG("[%s] No commands to be sent for state(%d)\n",
 			 panel->name, type);
@@ -633,6 +632,7 @@ int dsi_panel_tx_cmd_set(struct dsi_panel *panel,
 
 		if (type == DSI_CMD_SET_VID_TO_CMD_SWITCH)
 			cmds->msg.flags |= MIPI_DSI_MSG_ASYNC_OVERRIDE;
+
 		if (type == DSI_CMD_SET_MI_GIR_ON || type == DSI_CMD_SET_MI_GIR_OFF)
 			cmds->msg.flags |= MIPI_DSI_MSG_CMD_DMA_SCHED;
 
@@ -3101,8 +3101,8 @@ int dsi_dsc_populate_static_param(struct msm_display_dsc_info *dsc)
 
 	if (dsc->version == 0x11 && dsc->scr_rev == 0x1)
 		dsc->first_line_bpg_offset = 15;
-	else{
-		if(dsc->panel_id == 0x4D38324100360200 || dsc->panel_id == 0x4D38324100420200)
+	else {
+		if (dsc->panel_id == 0x4D38324100360200 || dsc->panel_id == 0x4D38324100420200)
 			dsc->first_line_bpg_offset = 13;
 		else
 			dsc->first_line_bpg_offset = 12;
@@ -4734,7 +4734,6 @@ exit:
 		panel->mi_cfg.bl_enable = true;
 	panel->mi_cfg.bl_wait_frame = false;
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_LP1");
 	return rc;
 }
 
@@ -4761,7 +4760,6 @@ int dsi_panel_set_lp2(struct dsi_panel *panel)
 
 exit:
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_LP2");
 	return rc;
 }
 
@@ -4826,12 +4824,8 @@ exit_skip:
 	mi_cfg->layer_fod_unlock_success = false;
 	mi_cfg->sysfs_fod_unlock_success = false;
 	mi_cfg->fod_to_nolp = false;
-	fm_stat.idle_status = false;
-
-
 exit:
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_NOLP");
 
 	return rc;
 }
@@ -5134,7 +5128,6 @@ int dsi_panel_switch(struct dsi_panel *panel)
 		       panel->name, rc);
 
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_TIMING_SWITCH");
 	return rc;
 }
 
@@ -5184,7 +5177,6 @@ int dsi_panel_dc_switch(struct dsi_panel *panel)
 		panel->name, panel->mi_cfg.dc_enable);
 
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_DC_CMD");
 	return rc;
 }
 
@@ -5253,10 +5245,8 @@ int dsi_panel_enable(struct dsi_panel *panel)
 	mi_cfg->doze_brightness_state = DOZE_TO_NORMAL;
 	mi_cfg->into_aod_pending = false;
 	mi_cfg->cabc_current_status = 0;
-	fm_stat.idle_status = false;
 
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_ON");
 
 	return rc;
 }
@@ -5315,7 +5305,6 @@ error:
 
 		if (panel->mi_cfg.gamma_cfg.black_setting_flag) {
 			mutex_lock(&panel->panel_lock);
-			display_utc_time_marker("DSI_CMD_SET_MI_BLACK_SETTING");
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_MI_BLACK_SETTING);
 			if (rc) {
 				DSI_ERR("[%s] failed to send DSI_CMD_SET_MI_BLACK_SETTING cmds, rc=%d\n",
@@ -5483,12 +5472,11 @@ int dsi_panel_disable(struct dsi_panel *panel)
 	mi_cfg->request_gir_status = false;
 	mi_cfg->local_hbm_cur_status = false;
 	mi_cfg->bl_enable = true;
+
 	if (mi_cfg->dc_type)
 		mi_cfg->dc_enable = false;
 
-
 	mutex_unlock(&panel->panel_lock);
-	display_utc_time_marker("DSI_CMD_SET_OFF");
 	return rc;
 }
 
