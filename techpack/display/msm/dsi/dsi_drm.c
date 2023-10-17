@@ -1169,9 +1169,11 @@ struct dsi_bridge *dsi_drm_bridge_init(struct dsi_display *display,
 
 	if (display->is_prim_display) {
 		gbridge = bridge;
+		atomic_set(&resume_pending, 0);
 		prim_panel_wakelock = wakeup_source_create("prim_panel_wakelock");
 		wakeup_source_add(prim_panel_wakelock);
 		atomic_set(&prim_panel_is_on, false);
+		init_waitqueue_head(&resume_wait_q);
 		INIT_DELAYED_WORK(&prim_panel_work, prim_panel_off_delayed_work);
 	}
 
