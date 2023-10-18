@@ -1,8 +1,9 @@
 /*
- * Copyright (C) 2010 - 2022 Novatek, Inc.
+ * Copyright (C) 2010 - 2018 Novatek, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
- * $Revision: 77624 $
- * $Date: 2021-02-05 10:03:05 +0800 (週五, 05 二月 2021) $
+ * $Revision: 68983 $
+ * $Date: 2020-09-17 09:43:23 +0800 (週四, 17 九月 2020) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,6 +23,17 @@
 #include "nt36xxx.h"
 
 #if BOOT_UPDATE_FIRMWARE
+
+#define SIZE_4KB 4096
+#define FLASH_SECTOR_SIZE SIZE_4KB
+#define FW_BIN_VER_OFFSET (fw_need_write_size - SIZE_4KB)
+#define FW_BIN_VER_BAR_OFFSET (FW_BIN_VER_OFFSET + 1)
+#define NVT_FLASH_END_FLAG_LEN 3
+#define NVT_FLASH_END_FLAG_ADDR (fw_need_write_size - NVT_FLASH_END_FLAG_LEN)
+
+#define NVT_DUMP_PARTITION      (0)
+#define NVT_DUMP_PARTITION_LEN  (1024)
+#define NVT_DUMP_PARTITION_PATH "/data/local/tmp"
 
 static ktime_t start, end;
 const struct firmware *fw_entry = NULL;
@@ -370,6 +382,148 @@ request_fail:
 	return ret;
 }
 
+#if NVT_DUMP_PARTITION
+/*******************************************************
+Description:
+	Novatek touchscreen dump flash partition function.
+
+return:
+	n.a.
+*******************************************************/
+loff_t file_offset = 0;
+static int32_t nvt_read_ram_and_save_file(uint32_t addr, uint16_t len, char *name)
+{
+	char file[256] = "";
+	uint8_t *fbufp = NULL;
+	int32_t ret = 0;
+	struct file *fp = NULL;
+	mm_segment_t org_fs;
+
+	sprintf(file, "%s/dump_%s.bin", NVT_DUMP_PARTITION_PATH, name);
+	NVT_LOG("Dump [%s] from 0x%08X to 0x%08X\n", file, addr, addr+len);
+
+	fbufp = (uint8_t *)kzalloc(len+1, GFP_KERNEL);
+	if(fbufp == NULL) {
+		NVT_ERR("kzalloc for fbufp failed!\n");
+		ret = -ENOMEM;
+		goto alloc_buf_fail;
+	}
+
+	org_fs = get_fs();
+	set_fs(KERNEL_DS);
+	fp = filp_open(file, O_RDWR | O_CREAT, 0644);
+	if (fp == NULL || IS_ERR(fp)) {
+		ret = -ENOMEM;
+		NVT_ERR("open file failed\n");
+		goto open_file_fail;
+	}
+
+	/* SPI read */
+	//---set xdata index to addr---
+	nvt_set_page(addr);
+
+	fbufp[0] = addr & 0x7F;	//offset
+	CTP_SPI_READ(ts->client, fbufp, len+1);
+
+	/* Write to file */
+	ret = vfs_write(fp, (char __user *)fbufp+1, len, &file_offset);
+	if (ret != len) {
+		NVT_ERR("write file failed\n");
+		goto open_file_fail;
+	} else {
+		ret = 0;
+	}
+
+open_file_fail:
+	set_fs(org_fs);
+	if (!IS_ERR_OR_NULL(fp)) {
+		filp_close(fp, NULL);
+		fp = NULL;
+	}
+
+	if (!IS_ERR_OR_NULL(fbufp)) {
+		kfree(fbufp);
+		fbufp = NULL;
+	}
+alloc_buf_fail:
+
+	return ret;
+}
+
+/*******************************************************
+Description:
+	Novatek touchscreen nvt_dump_partition function to dump
+ each partition for debug.
+
+return:
+	n.a.
+*******************************************************/
+static int32_t nvt_dump_partition(void)
+{
+	uint32_t list = 0;
+	char *name;
+	uint32_t SRAM_addr, size;
+	uint32_t i = 0;
+	uint16_t len = 0;
+	int32_t count = 0;
+	int32_t ret = 0;
+
+	if (NVT_DUMP_PARTITION_LEN >= sizeof(ts->rbuf)) {
+		NVT_ERR("dump len %d is larger than buffer size %ld\n",
+				NVT_DUMP_PARTITION_LEN, sizeof(ts->rbuf));
+		return -EINVAL;
+	} else if (NVT_DUMP_PARTITION_LEN >= NVT_TRANSFER_LEN) {
+		NVT_ERR("dump len %d is larger than NVT_TRANSFER_LEN\n", NVT_DUMP_PARTITION_LEN);
+		return -EINVAL;
+	}
+
+	if (bin_map == NULL) {
+		NVT_ERR("bin_map is NULL\n");
+		return -ENOMEM;
+	}
+
+	memset(fwbuf, 0, (NVT_DUMP_PARTITION_LEN+1));
+
+	for (list = 0; list < partition; list++) {
+		/* initialize variable */
+		SRAM_addr = bin_map[list].SRAM_addr;
+		size = bin_map[list].size;
+		name = bin_map[list].name;
+
+		/* ignore reserved partition (Reserved Partition size is zero) */
+		if (!size)
+			continue;
+		else
+			size = size +1;
+
+		/* write data to SRAM */
+		if (size % NVT_DUMP_PARTITION_LEN)
+			count = (size / NVT_DUMP_PARTITION_LEN) + 1;
+		else
+			count = (size / NVT_DUMP_PARTITION_LEN);
+
+		for (i = 0 ; i < count ; i++) {
+			len = (size < NVT_DUMP_PARTITION_LEN) ? size : NVT_DUMP_PARTITION_LEN;
+
+			/* dump for debug download firmware */
+			ret = nvt_read_ram_and_save_file(SRAM_addr, len, name);
+			if (ret < 0) {
+				NVT_ERR("nvt_read_ram_and_save_file failed, ret = %d\n", ret);
+				goto out;
+			}
+
+			SRAM_addr += NVT_DUMP_PARTITION_LEN;
+			size -= NVT_DUMP_PARTITION_LEN;
+		}
+
+		file_offset = 0;
+	}
+
+out:
+	return ret;
+}
+#endif /* NVT_DUMP_PARTITION */
+
 /*******************************************************
 Description:
 	Novatek touchscreen write data to sram function.
@@ -550,10 +704,10 @@ static void nvt_set_bld_crc_bank(uint32_t DES_ADDR, uint32_t SRAM_ADDR,
 	fwbuf[0] = LENGTH_ADDR & 0x7F;
 	fwbuf[1] = (size) & 0xFF;
 	fwbuf[2] = (size >> 8) & 0xFF;
-	fwbuf[3] = (size >> 16) & 0xFF;
-	if (ts->hw_crc == HWCRC_LEN_2Bytes) {
+	fwbuf[3] = (size >> 16) & 0x01;
+	if (ts->hw_crc == 1) {
 		CTP_SPI_WRITE(ts->client, fwbuf, 3);
-	} else if (ts->hw_crc >= HWCRC_LEN_3Bytes) {
+	} else if (ts->hw_crc > 1) {
 		CTP_SPI_WRITE(ts->client, fwbuf, 4);
 	}
 
@@ -693,9 +847,9 @@ static int32_t nvt_download_firmware_hw_crc(void)
 				goto fail;
 			}
 
-			ret = nvt_wait_auto_copy();
+			ret = nvt_check_spi_dma_tx_info();
 			if (ret) {
-				NVT_ERR("wait auto copy failed. (%d)\n", ret);
+				NVT_ERR("spi dma tx info failed. (%d)\n", ret);
 				goto fail;
 			}
 		} else {
@@ -705,6 +859,16 @@ static int32_t nvt_download_firmware_hw_crc(void)
 				goto fail;
 			}
 		}
+
+#if NVT_DUMP_PARTITION
+		ret = nvt_dump_partition();
+		if (ret) {
+			NVT_ERR("nvt_dump_partition failed, ret = %d\n", ret);
+		}
+#endif
+
+		/* enable hw bld crc function */
+		nvt_bld_crc_enable();
 
 		/* clear fw reset status & enable fw crc check */
 		nvt_fw_crc_enable();
@@ -774,6 +938,13 @@ static int32_t nvt_download_firmware(void)
 			NVT_ERR("Write_Firmware failed. (%d)\n", ret);
 			goto fail;
 		}
+
+#if NVT_DUMP_PARTITION
+		ret = nvt_dump_partition();
+		if (ret) {
+			NVT_ERR("nvt_dump_partition failed, ret = %d\n", ret);
+		}
+#endif
 
 		/* Set Boot Ready Bit */
 		nvt_boot_ready();
@@ -884,6 +1055,5 @@ void Boot_Update_Firmware(struct work_struct *work)
 	}
 	nvt_get_fw_info();
 	mutex_unlock(&ts->lock);
-	switch_pen_input_device();
 }
 #endif /* BOOT_UPDATE_FIRMWARE */

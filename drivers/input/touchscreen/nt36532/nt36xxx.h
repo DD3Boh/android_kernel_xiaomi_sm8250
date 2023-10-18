@@ -1,8 +1,9 @@
 /*
- * Copyright (C) 2010 - 2022 Novatek, Inc.
+ * Copyright (C) 2010 - 2018 Novatek, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
- * $Revision: 103375 $
- * $Date: 2022-07-29 10:34:16 +0800 (週五, 29 七月 2022) $
+ * $Revision: 69262 $
+ * $Date: 2020-09-23 15:07:14 +0800 (週三, 23 九月 2020) $
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -23,22 +24,11 @@
 #include <linux/of.h>
 #include <linux/spi/spi.h>
 #include <linux/uaccess.h>
-#include <linux/version.h>
-#include <linux/power_supply.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
-
-#ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
-#include "../xiaomi/xiaomi_touch.h"
-#endif
-
 #include "nt36xxx_mem_map.h"
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
-#define HAVE_PROC_OPS
-#endif
 
 #ifdef CONFIG_MTK_SPI
 /* Please copy mt_spi.h file under mtk spi driver folder */
@@ -64,8 +54,6 @@
 //#define IRQ_TYPE_EDGE_FALLING 2
 #define INT_TRIGGER_TYPE IRQ_TYPE_EDGE_RISING
 
-//---bus transfer length---
-#define BUS_TRANSFER_LENGTH  256
 
 //---SPI driver info.---
 #define NVT_SPI_NAME "NVT-ts"
@@ -82,8 +70,8 @@
 #define NVT_PEN_NAME "NVTCapacitivePen"
 
 //---Touch info.---
-#define TOUCH_DEFAULT_MAX_WIDTH 1800
-#define TOUCH_DEFAULT_MAX_HEIGHT 2880
+#define TOUCH_DEFAULT_MAX_WIDTH 1600
+#define TOUCH_DEFAULT_MAX_HEIGHT 2560
 #define TOUCH_MAX_FINGER_NUM 10
 #define TOUCH_KEY_NUM 0
 #if TOUCH_KEY_NUM > 0
@@ -103,42 +91,29 @@ extern const uint16_t touch_key_array[TOUCH_KEY_NUM];
 #define NVT_TOUCH_PROC 1
 #define NVT_TOUCH_EXT_PROC 1
 #define NVT_TOUCH_MP 1
-#define NVT_SAVE_TEST_DATA_IN_FILE 0
+#define NVT_TOUCH_MP_SETTING_CRITERIA_FROM_CSV 1
 #define MT_PROTOCOL_B 1
 #define WAKEUP_GESTURE 1
+#define FUNCPAGE_PALM 4
+#define PACKET_PALM_ON 3
+#define PACKET_PALM_OFF 4
+
 #if WAKEUP_GESTURE
 extern const uint16_t gesture_key_array[];
 #endif
 #define BOOT_UPDATE_FIRMWARE 1
-#define BOOT_UPDATE_FIRMWARE_NAME "novatek_nt36532_m82_fw_tm.bin"
-#define MP_UPDATE_FIRMWARE_NAME   "novatek_nt36532_m82_mp_tm.bin"
-#define DEFAULT_DEBUG_FW_NAME     "novatek_debug_fw.bin"
-#define DEFAULT_DEBUG_MP_NAME     "novatek_debug_mp.bin"
-#define NVT_SUPER_RESOLUTION_N 10
-#if NVT_SUPER_RESOLUTION_N
-#define POINT_DATA_LEN 108
-#else
-#define POINT_DATA_LEN 65
-#endif
+#define DEFAULT_BOOT_UPDATE_FIRMWARE_NAME "novatek_ts_fw.bin"
+#define DEFAULT_MP_UPDATE_FIRMWARE_NAME   "novatek_ts_mp.bin"
+#define DEFAULT_DEBUG_FW_NAME "novatek_debug_fw.bin"
+#define DEFAULT_DEBUG_MP_NAME "novatek_debug_mp.bin"
 #define POINT_DATA_CHECKSUM 1
 #define POINT_DATA_CHECKSUM_LEN 65
+#define CHECK_PEN_DATA_CHECKSUM 0
 
 //---ESD Protect.---
-#define NVT_TOUCH_ESD_PROTECT 0
+#define NVT_TOUCH_ESD_PROTECT 1
 #define NVT_TOUCH_ESD_CHECK_PERIOD 1500	/* ms */
 #define NVT_TOUCH_WDT_RECOVERY 1
-
-#define CHECK_PEN_DATA_CHECKSUM 0
-#define NVT_PEN_CONNECT_STRATEGY
-
-#if BOOT_UPDATE_FIRMWARE
-#define SIZE_4KB 4096
-#define FLASH_SECTOR_SIZE SIZE_4KB
-#define FW_BIN_VER_OFFSET (fw_need_write_size - SIZE_4KB)
-#define FW_BIN_VER_BAR_OFFSET (FW_BIN_VER_OFFSET + 1)
-#define NVT_FLASH_END_FLAG_LEN 3
-#define NVT_FLASH_END_FLAG_ADDR (fw_need_write_size - NVT_FLASH_END_FLAG_LEN)
-#endif
 
 enum nvt_ic_state {
 	NVT_IC_SUSPEND_IN,
@@ -163,46 +138,31 @@ struct nvt_ts_data {
 	struct input_dev *input_dev;
 	struct delayed_work nvt_fwu_work;
 	struct delayed_work nvt_lockdown_work;
-	struct mutex power_supply_lock;
-	struct work_struct power_supply_work;
-	struct notifier_block power_supply_notifier;
-	int is_usb_exist;
-	int db_wakeup;
-#if defined(NVT_PEN_CONNECT_STRATEGY)
+	struct work_struct switch_mode_work;
 	struct work_struct pen_charge_state_change_work;
+	bool pen_is_charge;
 	struct notifier_block pen_charge_state_notifier;
-	bool pen_bluetooth_connect;
-	bool pen_charge_connect;
-	bool game_mode_enable;
-	struct device *dev;
-	int pen_count;
-	bool pen_shield_flag;
-#endif
-	struct mutex pen_switch_lock;
-	int ic_state;
-	int gesture_command_delayed;
-	bool dev_pm_suspend;
-	struct completion dev_pm_suspend_completion;
 	uint16_t addr;
 	int8_t phys[32];
-#if defined(CONFIG_DRM_PANEL)
-	struct notifier_block drm_panel_notif;
-#elif defined(_MSM_DRM_NOTIFY_H_)
+#if defined(CONFIG_FB)
+#ifdef CONFIG_DRM
 	struct notifier_block drm_notif;
-#elif defined(CONFIG_FB)
+#else
 	struct notifier_block fb_notif;
+#endif
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
 #endif
 	uint32_t config_array_size;
 	struct nvt_config_info *config_array;
-	const char *fw_name;
-	const char *mp_name;
+	const u8 *fw_name;
+	const u8 *mp_name;
 	bool lkdown_readed;
 	u8 lockdown_info[NVT_LOCKDOWN_SIZE];
 	uint8_t fw_ver;
 	uint8_t x_num;
 	uint8_t y_num;
+	int ic_state;
 	uint16_t abs_x_max;
 	uint16_t abs_y_max;
 	uint8_t max_touch_num;
@@ -219,41 +179,50 @@ struct nvt_ts_data {
 	uint32_t reset_flags;
 	struct mutex lock;
 	const struct nvt_ts_mem_map *mmap;
+	uint8_t carrier_system;
 	uint8_t hw_crc;
-	uint8_t auto_copy;
 	uint16_t nvt_pid;
 	uint8_t *rbuf;
 	uint8_t *xbuf;
 	struct mutex xbuf_lock;
 	bool irq_enabled;
+	uint8_t cascade;
 	bool pen_support;
-	bool stylus_resol_double;
-	bool fw_debug;
+	bool wgp_stylus;
 	uint8_t x_gang_num;
 	uint8_t y_gang_num;
-	uint8_t debug_flag;
 	struct input_dev *pen_input_dev;
 	bool pen_input_dev_enable;
 	int8_t pen_phys[32];
+	struct workqueue_struct *event_wq;
+	struct work_struct suspend_work;
+	struct work_struct resume_work;
+	struct attribute_group *attrs;
 	int result_type;
 	int panel_index;
-#ifdef CONFIG_TOUCHSCREEN_NVT_DEBUG_FS
-	struct dentry *debugfs;
-#endif
-	uint32_t chip_ver_trim_addr;
-	uint32_t swrst_sif_addr;
-	uint32_t crc_err_flag_addr;
+	uint32_t spi_max_freq;
+	int db_wakeup;
 #ifdef CONFIG_MTK_SPI
 	struct mt_chip_conf spi_ctrl;
 #endif
 #ifdef CONFIG_SPI_MT65XX
     struct mtk_chip_config spi_ctrl;
 #endif
+#ifdef CONFIG_TOUCHSCREEN_NVT_DEBUG_FS
+		struct dentry *debugfs;
+#endif
+	uint8_t debug_flag;
+	bool fw_debug;
+	bool dev_pm_suspend;
+	struct completion dev_pm_suspend_completion;
+	bool palm_sensor_switch;
+	int gesture_command_delayed;
 	struct pinctrl *ts_pinctrl;
 	struct pinctrl_state *pinctrl_state_active;
 	struct pinctrl_state *pinctrl_state_suspend;
-	struct workqueue_struct *event_wq;
-	struct work_struct resume_work;
+#ifndef NVT_SAVE_TESTDATA_IN_FILE
+	void *testdata;
+#endif
 };
 
 #if NVT_TOUCH_PROC
@@ -285,7 +254,6 @@ typedef enum {
 #define DUMMY_BYTES (1)
 #define NVT_TRANSFER_LEN	(63*1024)
 #define NVT_READ_LEN		(2*1024)
-#define NVT_XBUF_LEN		(NVT_TRANSFER_LEN+1+DUMMY_BYTES)
 
 typedef enum {
 	NVTWRITE = 0,
@@ -303,21 +271,23 @@ void nvt_eng_reset(void);
 void nvt_sw_reset(void);
 void nvt_sw_reset_idle(void);
 void nvt_boot_ready(void);
+void nvt_bld_crc_enable(void);
 void nvt_fw_crc_enable(void);
 void nvt_tx_auto_copy_mode(void);
-void nvt_read_fw_history(uint32_t fw_history_addr);
+void nvt_set_dbgfw_status(bool enable);
 void nvt_match_fw(void);
 int32_t nvt_update_firmware(const char *firmware_name);
 int32_t nvt_check_fw_reset_state(RST_COMPLETE_STATE check_reset_state);
 int32_t nvt_get_fw_info(void);
 int32_t nvt_clear_fw_status(void);
 int32_t nvt_check_fw_status(void);
+int32_t nvt_check_spi_dma_tx_info(void);
 int32_t nvt_set_page(uint32_t addr);
-int32_t nvt_wait_auto_copy(void);
 int32_t nvt_write_addr(uint32_t addr, uint8_t data);
 bool nvt_get_dbgfw_status(void);
+int32_t nvt_set_pocket_palm_switch(uint8_t pocket_palm_switch);
 #if NVT_TOUCH_ESD_PROTECT
 extern void nvt_esd_check_enable(uint8_t enable);
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
-int switch_pen_input_device(void);
+
 #endif /* _LINUX_NVT_TOUCH_H */

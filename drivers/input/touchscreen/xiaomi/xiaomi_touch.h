@@ -1,201 +1,495 @@
-#ifndef __XIAOMI__TOUCH_H
-#define __XIAOMI__TOUCH_H
-#include <linux/device.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/wait.h>
-#include <linux/types.h>
-#include <linux/ioctl.h>
-#include <linux/miscdevice.h>
-#include <linux/proc_fs.h>
-#include <linux/uaccess.h>
-#include <linux/debugfs.h>
-#include <linux/device.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
-#include <linux/platform_device.h>
-#include <linux/wait.h>
-#include <linux/poll.h>
-#include <linux/slab.h>
-#include <linux/input.h>
+#include "xiaomi_touch.h"
 
-#define MI_TAG "[mi-touch]"
+static struct xiaomi_touch_pdata *touch_pdata;
+int mi_log_level;
 
-/*Xiaomi Touch driver log level
-  *error    : 0
-  *info     : 1
-  *notice   : 2
-  *debug    : 3
-*/
-extern int mi_log_level;
+static int xiaomi_touch_dev_open(struct inode *inode, struct file *file)
+{
+	struct xiaomi_touch *dev = NULL;
+	int i = MINOR(inode->i_rdev);
+	struct xiaomi_touch_pdata *touch_pdata;
 
-#define TOUCH_ERROR 0
-#define TOUCH_INFO 1
-#define TOUCH_NOTICE 2
-#define TOUCH_DEBUG 3
+	pr_info("%s\n", __func__);
+	dev = xiaomi_touch_dev_get(i);
+	if (!dev) {
+		pr_err("%s cant get dev\n", __func__);
+		return -ENOMEM;
+	}
+	touch_pdata = dev_get_drvdata(dev->dev);
 
-#define XIAOMI_TOUCH_DEVICE_NAME "xiaomi-touch"
-#define KEY_INPUT_DEVICE_PHYS "xiaomi-touch/input0"
-/*Xiaomi Special Touch Event Code*/
-#define BTN_TAP 0x153
+	file->private_data = touch_pdata;
+	return 0;
+}
 
-#define MI_TOUCH_LOGD(level, fmt, args...)                                     \
-	do {                                                                   \
-		if (mi_log_level == TOUCH_DEBUG && level == 1)                 \
-			pr_info(fmt, ##args);                                  \
-	} while (0)
+static ssize_t xiaomi_touch_dev_read(struct file *file, char __user *buf,
+			   size_t count, loff_t *pos)
+{
+	return 0;
+}
 
-#define MI_TOUCH_LOGN(level, fmt, args...)                                     \
-	do {                                                                   \
-		if (mi_log_level >= TOUCH_NOTICE && level == 1)                \
-			pr_info(fmt, ##args);                                  \
-	} while (0)
+static ssize_t xiaomi_touch_dev_write(struct file *file,
+		const char __user *buf, size_t count, loff_t *pos)
+{
+	return 0;
+}
 
-#define MI_TOUCH_LOGI(level, fmt, args...)                                     \
-	do {                                                                   \
-		if (mi_log_level >= TOUCH_INFO && level == 1)                  \
-			pr_info(fmt, ##args);                                  \
-	} while (0)
+static unsigned int xiaomi_touch_dev_poll(struct file *file,
+		poll_table *wait)
+{
+	return 0;
+}
 
-#define MI_TOUCH_LOGE(level, fmt, args...)                                     \
-	do {                                                                   \
-		if (level == 1)                                                \
-			pr_err(fmt, ##args);                                   \
-	} while (0)
+static long xiaomi_touch_dev_ioctl(struct file *file, unsigned int cmd,
+		unsigned long arg)
+{
+	int ret = -EINVAL;
+	int buf[VALUE_TYPE_SIZE] = {0,};
+	struct xiaomi_touch_pdata *pdata = file->private_data;
+	void __user *argp = (void __user *) arg;
+	struct xiaomi_touch_interface *touch_data = pdata->touch_data;
+	struct xiaomi_touch *dev = pdata->device;
+	int user_cmd = _IOC_NR(cmd);
 
-#define XIAOMI_ROI	0
+	if (!pdata || !touch_data || !dev) {
+		pr_err("%s invalid memory\n", __func__);
+		return -ENOMEM;
+	}
 
-#if XIAOMI_ROI
-#define DIFF_SENSE_NODE 7
-#define DIFF_FORCE_NODE 7
+	mutex_lock(&dev->mutex);
+	ret = copy_from_user(&buf, (int __user *)argp, sizeof(buf));
 
-struct xiaomi_diff_data {
-	u8 flag;
-	u8 x;
-	u8 y;
-	u8 frame;
-	s16 data[DIFF_SENSE_NODE * DIFF_FORCE_NODE];
-};
-#endif
+	pr_info("%s cmd:%d, mode:%d, value:%d\n", __func__, user_cmd, buf[0], buf[1]);
 
-/*CUR,DEFAULT,MIN,MAX*/
-#define VALUE_TYPE_SIZE 6
-#define VALUE_GRIP_SIZE 9
-#define MAX_BUF_SIZE 256
-enum MODE_CMD {
-	SET_CUR_VALUE = 0,
-	GET_CUR_VALUE,
-	GET_DEF_VALUE,
-	GET_MIN_VALUE,
-	GET_MAX_VALUE,
-	GET_MODE_VALUE,
-	RESET_MODE,
-	SET_LONG_VALUE,
-};
+	switch (user_cmd) {
+	case SET_CUR_VALUE:
+		if (touch_data->setModeValue)
+			buf[0] = touch_data->setModeValue(buf[0], buf[1]);
+		break;
+	case GET_CUR_VALUE:
+	case GET_DEF_VALUE:
+	case GET_MIN_VALUE:
+	case GET_MAX_VALUE:
+		if (touch_data->getModeValue)
+			buf[0] = touch_data->getModeValue(buf[0], user_cmd);
+		break;
+	case RESET_MODE:
+		if (touch_data->resetMode)
+			buf[0] = touch_data->resetMode(buf[0]);
+		break;
+	case GET_MODE_VALUE:
+		if (touch_data->getModeValue)
+			ret = touch_data->getModeAll(buf[0], buf);
+		break;
+	default:
+		pr_err("%s don't support mode\n", __func__);
+		ret = -EINVAL;
+		break;
+	}
 
-enum MODE_TYPE {
-	Touch_Game_Mode = 0,
-	Touch_Active_MODE = 1,
-	Touch_UP_THRESHOLD = 2,
-	Touch_Tolerance = 3,
-#ifdef CONFIG_TOUCHSCREEN_SUPPORT_NEW_GAME_MODE
-	Touch_Aim_Sensitivity = 4,
-	Touch_Tap_Stability = 5,
-	Touch_Expert_Mode = 6,
-#else
-	Touch_Wgh_Min = 4,
-	Touch_Wgh_Max = 5,
-	Touch_Wgh_Step = 6,
-#endif
-	Touch_Edge_Filter = 7,
-	Touch_Panel_Orientation = 8,
-	Touch_Report_Rate = 9,
-	Touch_Fod_Enable = 10,
-	Touch_Aod_Enable = 11,
-	Touch_Resist_RF = 12,
-	Touch_Idle_Time = 13,
-	Touch_Doubletap_Mode = 14,
-	Touch_Grip_Mode = 15,
-	Touch_FodIcon_Enable = 16,
-	Touch_Nonui_Mode = 17,
-	Touch_Debug_Level = 18,
-	Touch_Power_Status = 19,
-	Touch_Pen_ENABLE = 20,
-	Touch_Mode_NUM = 21,
+	if (ret >= 0)
+		ret = copy_to_user((int __user *)argp, &buf, sizeof(buf));
+	else
+		pr_err("%s can't get data from touch driver\n", __func__);
+
+	mutex_unlock(&dev->mutex);
+
+	return ret;
+}
+
+static int xiaomi_touch_dev_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static const struct file_operations xiaomitouch_dev_fops = {
+	.owner = THIS_MODULE,
+	.open = xiaomi_touch_dev_open,
+	.read = xiaomi_touch_dev_read,
+	.write = xiaomi_touch_dev_write,
+	.poll = xiaomi_touch_dev_poll,
+	.unlocked_ioctl = xiaomi_touch_dev_ioctl,
+	.compat_ioctl = xiaomi_touch_dev_ioctl,
+	.release = xiaomi_touch_dev_release,
+	.llseek	= no_llseek,
 };
 
-struct xiaomi_touch_interface {
-	int touch_mode[Touch_Mode_NUM][VALUE_TYPE_SIZE];
-	int (*setModeValue)(int Mode, int value);
-	int (*setModeLongValue)(int Mode, int value_len, int *value);
-	int (*getModeValue)(int Mode, int value_type);
-	int (*getModeAll)(int Mode, int *modevalue);
-	int (*resetMode)(int Mode);
-	int (*p_sensor_read)(void);
-	int (*p_sensor_write)(int on);
-	int (*palm_sensor_read)(void);
-	int (*palm_sensor_write)(int on);
-	u8 (*panel_vendor_read)(void);
-	u8 (*panel_color_read)(void);
-	u8 (*panel_display_read)(void);
-	char (*touch_vendor_read)(void);
-	int (*get_touch_super_resolution_factor)(void);
-#if XIAOMI_ROI
-	int (*partial_diff_data_read)(struct xiaomi_diff_data *data);
-#endif
-	int long_mode_len;
-	int long_mode_value[MAX_BUF_SIZE];
+static struct xiaomi_touch xiaomi_touch_dev = {
+	.misc_dev = {
+		.minor = MISC_DYNAMIC_MINOR,
+		.name = "xiaomi-touch",
+		.fops = &xiaomitouch_dev_fops,
+		.parent = NULL,
+	},
+	.mutex = __MUTEX_INITIALIZER(xiaomi_touch_dev.mutex),
+	.palm_mutex = __MUTEX_INITIALIZER(xiaomi_touch_dev.palm_mutex),
+	.psensor_mutex = __MUTEX_INITIALIZER(xiaomi_touch_dev.psensor_mutex),
+	.wait_queue = __WAIT_QUEUE_HEAD_INITIALIZER(xiaomi_touch_dev.wait_queue),
 };
 
-struct xiaomi_touch {
-	struct miscdevice misc_dev;
-	struct input_dev *key_input_dev;
-	struct device *dev;
-	struct class *class;
-	struct attribute_group attrs;
-	struct mutex mutex;
-	struct mutex palm_mutex;
-	struct mutex psensor_mutex;
-	wait_queue_head_t wait_queue;
-#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
-	struct mutex pen_connect_strategy_mutex;
-#endif // CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
+struct xiaomi_touch *xiaomi_touch_dev_get(int minor)
+{
+	if (xiaomi_touch_dev.misc_dev.minor == minor)
+		return &xiaomi_touch_dev;
+	else
+		return NULL;
+}
+
+struct class *get_xiaomi_touch_class()
+{
+	return xiaomi_touch_dev.class;
+}
+
+struct device *get_xiaomi_touch_dev()
+{
+	return xiaomi_touch_dev.dev;
+}
+
+int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data)
+{
+	int ret = 0;
+	struct xiaomi_touch_interface *touch_data = NULL;
+
+	if (!touch_pdata)
+		ret = -ENOMEM;
+
+	touch_data = touch_pdata->touch_data;
+	pr_info("%s\n", __func__);
+
+	mutex_lock(&xiaomi_touch_dev.mutex);
+
+	touch_data->setModeValue = data->setModeValue;
+	touch_data->getModeValue = data->getModeValue;
+	touch_data->resetMode = data->resetMode;
+	touch_data->getModeAll = data->getModeAll;
+	touch_data->palm_sensor_read = data->palm_sensor_read;
+	touch_data->palm_sensor_write = data->palm_sensor_write;
+	touch_data->p_sensor_read = data->p_sensor_read;
+	touch_data->p_sensor_write = data->p_sensor_write;
+	touch_data->panel_vendor_read = data->panel_vendor_read;
+	touch_data->panel_color_read = data->panel_color_read;
+	touch_data->panel_display_read = data->panel_display_read;
+	touch_data->touch_vendor_read = data->touch_vendor_read;
+
+	mutex_unlock(&xiaomi_touch_dev.mutex);
+
+	return ret;
+}
+
+int update_palm_sensor_value(int value)
+{
+	struct xiaomi_touch *dev = NULL;
+
+	mutex_lock(&xiaomi_touch_dev.palm_mutex);
+
+	if (!touch_pdata) {
+		mutex_unlock(&xiaomi_touch_dev.palm_mutex);
+		return -ENODEV;
+	}
+
+	dev = touch_pdata->device;
+
+	if (value != touch_pdata->palm_value) {
+		pr_info("%s value:%d\n", __func__, value);
+		touch_pdata->palm_value = value;
+		touch_pdata->palm_changed = true;
+		wake_up(&dev->wait_queue);
+	}
+
+	mutex_unlock(&xiaomi_touch_dev.palm_mutex);
+	return 0;
+}
+
+static ssize_t palm_sensor_show(struct device *dev,
+struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+	struct xiaomi_touch *touch_dev = pdata->device;
+
+	wait_event_interruptible(touch_dev->wait_queue, pdata->palm_changed);
+	pdata->palm_changed = false;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", pdata->palm_value);
+}
+
+static ssize_t palm_sensor_store(struct device *dev,
+struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int input;
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (sscanf(buf, "%d", &input) < 0)
+			return -EINVAL;
+
+	if (pdata->touch_data->palm_sensor_write)
+		pdata->touch_data->palm_sensor_write(!!input);
+	else {
+		pr_err("%s has not implement\n", __func__);
+	}
+	pr_info("%s value:%d\n", __func__, !!input);
+
+	return count;
+}
+
+int update_p_sensor_value(int value)
+{
+	struct xiaomi_touch *dev = NULL;
+
+	mutex_lock(&xiaomi_touch_dev.psensor_mutex);
+
+	if (!touch_pdata) {
+		mutex_unlock(&xiaomi_touch_dev.psensor_mutex);
+		return -ENODEV;
+	}
+
+	dev = touch_pdata->device;
+
+	if (value != touch_pdata->psensor_value) {
+		pr_info("%s value:%d\n", __func__, value);
+		touch_pdata->psensor_value = value;
+		touch_pdata->psensor_changed = true;
+		wake_up(&dev->wait_queue);
+	}
+
+	mutex_unlock(&xiaomi_touch_dev.psensor_mutex);
+	return 0;
+}
+
+static ssize_t p_sensor_show(struct device *dev,
+struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+	struct xiaomi_touch *touch_dev = pdata->device;
+
+	wait_event_interruptible(touch_dev->wait_queue, pdata->psensor_changed);
+	pdata->psensor_changed = false;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", pdata->psensor_value);
+}
+
+static ssize_t p_sensor_store(struct device *dev,
+struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned int input;
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (sscanf(buf, "%d", &input) < 0)
+			return -EINVAL;
+
+	if (pdata->touch_data->p_sensor_write)
+		pdata->touch_data->p_sensor_write(!!input);
+	else {
+		pr_err("%s has not implement\n", __func__);
+	}
+	pr_info("%s value:%d\n", __func__, !!input);
+
+	return count;
+}
+
+static ssize_t panel_vendor_show(struct device *dev,
+struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (pdata->touch_data->panel_vendor_read)
+		return snprintf(buf, PAGE_SIZE, "%c", pdata->touch_data->panel_vendor_read());
+	else
+		return 0;
+}
+
+static ssize_t panel_color_show(struct device *dev,
+struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (pdata->touch_data->panel_color_read)
+		return snprintf(buf, PAGE_SIZE, "%c", pdata->touch_data->panel_color_read());
+	else
+		return 0;
+}
+
+static ssize_t panel_display_show(struct device *dev,
+struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (pdata->touch_data->panel_display_read)
+		return snprintf(buf, PAGE_SIZE, "%c", pdata->touch_data->panel_display_read());
+	else
+		return 0;
+}
+
+static ssize_t touch_vendor_show(struct device *dev,
+struct device_attribute *attr, char *buf)
+{
+	struct xiaomi_touch_pdata *pdata = dev_get_drvdata(dev);
+
+	if (pdata->touch_data->touch_vendor_read)
+		return snprintf(buf, PAGE_SIZE, "%c", pdata->touch_data->touch_vendor_read());
+	else
+		return 0;
+}
+
+static DEVICE_ATTR(palm_sensor, (S_IRUGO | S_IWUSR | S_IWGRP),
+		   palm_sensor_show, palm_sensor_store);
+
+static DEVICE_ATTR(p_sensor, (S_IRUGO | S_IWUSR | S_IWGRP),
+		   p_sensor_show, p_sensor_store);
+
+static DEVICE_ATTR(panel_vendor, (S_IRUGO),
+		   panel_vendor_show, NULL);
+
+static DEVICE_ATTR(panel_color, (S_IRUGO),
+		   panel_color_show, NULL);
+
+static DEVICE_ATTR(panel_display, (S_IRUGO),
+		   panel_display_show, NULL);
+
+static DEVICE_ATTR(touch_vendor, (S_IRUGO),
+		   touch_vendor_show, NULL);
+
+static struct attribute *touch_attr_group[] = {
+	&dev_attr_palm_sensor.attr,
+	&dev_attr_p_sensor.attr,
+	&dev_attr_panel_vendor.attr,
+	&dev_attr_panel_color.attr,
+	&dev_attr_panel_display.attr,
+	&dev_attr_touch_vendor.attr,
+	NULL,
 };
 
-struct xiaomi_touch_pdata {
-	struct xiaomi_touch *device;
-	struct xiaomi_touch_interface *touch_data;
-	int palm_value;
-	bool palm_changed;
-	int psensor_value;
-	bool psensor_changed;
-	const char *name;
-	u8 debug_log;
-#if XIAOMI_ROI
-	struct xiaomi_diff_data *diff_data;
-	bool debug_roi_flag;
-#endif
-#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
-	bool pen_active;
-#endif // CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
+static const struct of_device_id xiaomi_touch_of_match[] = {
+	{ .compatible = "xiaomi-touch", },
+	{ },
 };
 
-struct xiaomi_touch *xiaomi_touch_dev_get(int minor);
+static int xiaomi_touch_parse_dt(struct device *dev, struct xiaomi_touch_pdata *data)
+{
+	int ret;
+	struct device_node *np;
 
-extern struct class *get_xiaomi_touch_class(void);
+	np = dev->of_node;
+	if (!np)
+		return -ENODEV;
 
-extern struct device *get_xiaomi_touch_dev(void);
+	ret = of_property_read_string(np, "touch,name", &data->name);
+	if (ret)
+		return ret;
 
-extern int update_palm_sensor_value(int value);
+	pr_info("%s touch,name:%s\n", __func__, data->name);
 
-extern int update_p_sensor_value(int value);
+	return 0;
+}
 
-int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data);
+static int xiaomi_touch_probe(struct platform_device *pdev)
+{
+	int ret = 0;
+	struct device *dev = &pdev->dev;
+	struct xiaomi_touch_pdata *pdata;
 
-#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
-int update_pen_connect_strategy_value(bool pen_active);
-#endif //CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
+	pdata = devm_kzalloc(dev, sizeof(struct xiaomi_touch_pdata), GFP_KERNEL);
+	if (!pdata)
+		return -ENOMEM;
 
-#endif
+	pr_info("%s enter\n", __func__);
+
+	ret = xiaomi_touch_parse_dt(dev, pdata);
+	if (ret < 0) {
+		pr_err("%s parse dt error:%d\n", __func__, ret);
+		goto parse_dt_err;
+	}
+
+	ret = misc_register(&xiaomi_touch_dev.misc_dev);
+	if (ret) {
+		pr_err("%s create misc device err:%d\n", __func__, ret);
+		goto parse_dt_err;
+	}
+
+	if (!xiaomi_touch_dev.class)
+		xiaomi_touch_dev.class = class_create(THIS_MODULE, "touch");
+
+	if (!xiaomi_touch_dev.class) {
+		pr_err("%s create device class err\n", __func__);
+		goto class_create_err;
+	}
+
+	xiaomi_touch_dev.dev = device_create(xiaomi_touch_dev.class, NULL, 'T', NULL, "touch_dev");
+	if (!xiaomi_touch_dev.dev) {
+		pr_err("%s create device dev err\n", __func__);
+		goto device_create_err;
+	}
+
+	pdata->touch_data = (struct xiaomi_touch_interface *)kzalloc(sizeof(struct xiaomi_touch_interface), GFP_KERNEL);
+	if (pdata->touch_data == NULL) {
+		ret = -ENOMEM;
+		pr_err("%s alloc mem for touch_data\n", __func__);
+		goto data_mem_err;
+	}
+
+	pdata->device = &xiaomi_touch_dev;
+	dev_set_drvdata(xiaomi_touch_dev.dev, pdata);
+
+	touch_pdata = pdata;
+
+	xiaomi_touch_dev.attrs.attrs = touch_attr_group;
+	ret = sysfs_create_group(&xiaomi_touch_dev.dev->kobj, &xiaomi_touch_dev.attrs);
+	if (ret) {
+		pr_err("%s ERROR: Cannot create sysfs structure!:%d\n", __func__, ret);
+		ret = -ENODEV;
+		goto sys_group_err;
+	}
+
+	pr_info("%s over\n", __func__);
+
+	return ret;
+
+sys_group_err:
+	if (pdata->touch_data) {
+		kfree(pdata->touch_data);
+		pdata->touch_data = NULL;
+	}
+data_mem_err:
+	device_destroy(xiaomi_touch_dev.class, 0);
+device_create_err:
+	class_destroy(xiaomi_touch_dev.class);
+class_create_err:
+	misc_deregister(&xiaomi_touch_dev.misc_dev);
+parse_dt_err:
+	pr_err("%s fail!\n", __func__);
+	return ret;
+}
+
+static int xiaomi_touch_remove(struct platform_device *pdev)
+{
+	device_destroy(xiaomi_touch_dev.class, 0);
+	class_destroy(xiaomi_touch_dev.class);
+	misc_deregister(&xiaomi_touch_dev.misc_dev);
+	if (touch_pdata->touch_data) {
+		kfree(touch_pdata->touch_data);
+		touch_pdata->touch_data = NULL;
+	}
+
+	return 0;
+}
+
+static struct platform_driver xiaomi_touch_device_driver = {
+	.probe		= xiaomi_touch_probe,
+	.remove		= xiaomi_touch_remove,
+	.driver		= {
+		.name	= "xiaomi-touch",
+		.of_match_table = of_match_ptr(xiaomi_touch_of_match),
+	}
+};
+
+static int __init xiaomi_touch_init(void)
+{
+	return platform_driver_register(&xiaomi_touch_device_driver);
+
+}
+
+static void __exit xiaomi_touch_exit(void)
+{
+	platform_driver_unregister(&xiaomi_touch_device_driver);
+}
+
+subsys_initcall(xiaomi_touch_init);
+module_exit(xiaomi_touch_exit);
