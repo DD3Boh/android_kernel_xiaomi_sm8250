@@ -1052,12 +1052,19 @@ static int qusb_phy_dpdm_regulator_disable(struct regulator_dev *rdev)
 			qusb_phy_clear_tcsr_clamp(qphy, false);
 
 		/*
-		 * Phy reset is needed in case multiple instances
-		 * of HSPHY exists with shared power supplies. This
-		 * reset is to bring out the PHY from high-Z state
-		 * and avoid extra current consumption.
-		 */
-		qusb_phy_reset(qphy);
+		* Phy reset is needed in case multiple instances
+		* of HSPHY exists with shared power supplies. This
+		* reset is to bring out the PHY from high-Z state
+		* and avoid extra current consumption.
+		*/
+		ret = reset_control_assert(qphy->phy_reset);
+		if (ret)
+			dev_err(qphy->phy.dev, "phyassert failed\n");
+		usleep_range(100, 150);
+		ret = reset_control_deassert(qphy->phy_reset);
+		if (ret)
+			dev_err(qphy->phy.dev, "deassert failed\n");
+
 		ret = qusb_phy_enable_power(qphy, false);
 		if (ret < 0) {
 			dev_dbg(qphy->phy.dev,

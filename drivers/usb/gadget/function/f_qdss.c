@@ -503,8 +503,6 @@ static void qdss_unbind(struct usb_configuration *c, struct usb_function *f)
 	qdss_string_defs[QDSS_DATA_IDX].id = 0;
 	qdss_string_defs[QDSS_CTRL_IDX].id = 0;
 
-	qdss->debug_inface_enabled = 0;
-
 	clear_eps(f);
 	clear_desc(gadget, f);
 }
@@ -945,8 +943,9 @@ close:
 	}
 	gadget = qdss->gadget;
 	ch->app_conn = 0;
+	ch->priv = NULL;
+	ch->notify = NULL;
 	spin_unlock_irqrestore(&channel_lock, flags);
-
 	status = uninit_data(qdss->port.data);
 	if (status)
 		pr_err("%s: uninit_data error\n", __func__);
@@ -981,7 +980,9 @@ static void qdss_cleanup(void)
 
 static void qdss_free_func(struct usb_function *f)
 {
-	/* Do nothing as usb_qdss_alloc() doesn't alloc anything. */
+	struct f_qdss *qdss = func_to_qdss(f);
+
+	qdss->debug_inface_enabled = false;
 }
 
 static inline struct usb_qdss_opts *to_f_qdss_opts(struct config_item *item)

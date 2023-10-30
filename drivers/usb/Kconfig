@@ -92,37 +92,37 @@ config USB_PCI
 
 if USB
 
-source "drivers/usb/core/Kconfig"
+source "drivers/usb_dagu/core/Kconfig"
 
-source "drivers/usb/mon/Kconfig"
+source "drivers/usb_dagu/mon/Kconfig"
 
-source "drivers/usb/wusbcore/Kconfig"
+source "drivers/usb_dagu/wusbcore/Kconfig"
 
-source "drivers/usb/host/Kconfig"
+source "drivers/usb_dagu/host/Kconfig"
 
-source "drivers/usb/renesas_usbhs/Kconfig"
+source "drivers/usb_dagu/renesas_usbhs/Kconfig"
 
-source "drivers/usb/class/Kconfig"
+source "drivers/usb_dagu/class/Kconfig"
 
-source "drivers/usb/storage/Kconfig"
+source "drivers/usb_dagu/storage/Kconfig"
 
-source "drivers/usb/image/Kconfig"
+source "drivers/usb_dagu/image/Kconfig"
 
-source "drivers/usb/usbip/Kconfig"
+source "drivers/usb_dagu/usbip/Kconfig"
 
 endif
 
-source "drivers/usb/mtu3/Kconfig"
+source "drivers/usb_dagu/mtu3/Kconfig"
 
-source "drivers/usb/musb/Kconfig"
+source "drivers/usb_dagu/musb/Kconfig"
 
-source "drivers/usb/dwc3/Kconfig"
+source "drivers/usb_dagu/dwc3/Kconfig"
 
-source "drivers/usb/dwc2/Kconfig"
+source "drivers/usb_dagu/dwc2/Kconfig"
 
-source "drivers/usb/chipidea/Kconfig"
+source "drivers/usb_dagu/chipidea/Kconfig"
 
-source "drivers/usb/isp1760/Kconfig"
+source "drivers/usb_dagu/isp1760/Kconfig"
 
 comment "USB port drivers"
 
@@ -157,23 +157,23 @@ config USB_USS720
 	  To compile this driver as a module, choose M here: the
 	  module will be called uss720.
 
-source "drivers/usb/serial/Kconfig"
+source "drivers/usb_dagu/serial/Kconfig"
 
-source "drivers/usb/misc/Kconfig"
+source "drivers/usb_dagu/misc/Kconfig"
 
-source "drivers/usb/atm/Kconfig"
+source "drivers/usb_dagu/atm/Kconfig"
 
 endif # USB
 
-source "drivers/usb/phy/Kconfig"
+source "drivers/usb_dagu/phy/Kconfig"
 
-source "drivers/usb/gadget/Kconfig"
+source "drivers/usb_dagu/gadget/Kconfig"
 
-source "drivers/usb/typec/Kconfig"
+source "drivers/usb_dagu/typec/Kconfig"
 
-source "drivers/usb/roles/Kconfig"
+source "drivers/usb_dagu/roles/Kconfig"
 
-source "drivers/usb/pd/Kconfig"
+source "drivers/usb_dagu/pd/Kconfig"
 
 config USB_LED_TRIG
 	bool "USB LED Triggers"
