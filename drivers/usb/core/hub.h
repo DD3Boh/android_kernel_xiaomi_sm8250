@@ -71,8 +71,6 @@ struct usb_hub {
 	struct delayed_work	init_work;
 	struct work_struct      events;
 	struct usb_port		**ports;
-	int 			asuspend;
-	int 			addr_number;
 };
 
 /**
