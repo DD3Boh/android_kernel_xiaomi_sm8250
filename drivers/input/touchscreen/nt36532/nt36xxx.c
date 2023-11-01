@@ -55,11 +55,6 @@ uint8_t esd_check = false;
 uint8_t esd_retry = 0;
 #endif /* #if NVT_TOUCH_ESD_PROTECT */
 
-#if defined(NVT_PEN_CONNECT_STRATEGY)
-extern int pen_charge_state_notifier_register_client(struct notifier_block *nb);
-extern int pen_charge_state_notifier_unregister_client(struct notifier_block *nb);
-#endif /* NVT_PEN_CONNECT_STRATEGY */
-
 #if NVT_TOUCH_EXT_PROC
 extern int32_t nvt_extra_proc_init(void);
 extern void nvt_extra_proc_deinit(void);
@@ -1230,8 +1225,8 @@ int switch_pen_input_device(void) {
 	msleep(35);
 	mutex_lock(&ts->pen_switch_lock);
 	enable = ((ts->pen_bluetooth_connect) && !(ts->game_mode_enable));
-	NVT_LOG("pen_bluetooth_connect is %d, pen_charge_connect is %d, game_mode_enable %d, %s pen input device\n",
-	ts->pen_bluetooth_connect, ts->pen_charge_connect, ts->game_mode_enable, enable ? "ENABLE" : "DISABLE");
+	NVT_LOG("pen_bluetooth_connect is %d, game_mode_enable %d, %s pen input device\n",
+	ts->pen_bluetooth_connect, ts->game_mode_enable, enable ? "ENABLE" : "DISABLE");
 	//---set xdata index to EVENT BUF ADDR---
 	ret = nvt_set_page(ts->mmap->EVENT_BUF_ADDR | EVENT_MAP_HOST_CMD);
 	if (ret < 0) {
@@ -2667,29 +2662,6 @@ static u8 nvt_panel_display_read(void)
 }
 #endif
 
-#if defined(NVT_PEN_CONNECT_STRATEGY)
-static int nvt_pen_charge_state_notifier_callback(struct notifier_block *self, unsigned long event, void *data) {
-	//ts->pen_is_charge = !!event;
-	ts->pen_charge_connect = !!event;
-	release_pen_event();
-	schedule_work(&ts->pen_charge_state_change_work);
-	return 0;
-}
-
-static void nvt_pen_charge_state_change_work(struct work_struct *work)
-{
-	NVT_LOG("++\n");
-	if(!ts) {
-		NVT_LOG("ts is not exist, stop work");
-		goto nvt_pen_charge_state_change_work_out;
-	}
-	switch_pen_input_device();
-
-nvt_pen_charge_state_change_work_out:
-	NVT_LOG("--\n");
-}
-#endif
-
 static void get_lockdown_info(struct work_struct *work)
 {
 	int ret = 0;
@@ -3291,17 +3263,8 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 
 #if defined(NVT_PEN_CONNECT_STRATEGY)
 	ts->pen_bluetooth_connect = 0;
-	ts->pen_charge_connect = false;
 	ts->game_mode_enable = 0;
 	mutex_init(&ts->pen_switch_lock);
-	INIT_WORK(&ts->pen_charge_state_change_work, nvt_pen_charge_state_change_work);
-	ts->pen_charge_state_notifier.notifier_call = nvt_pen_charge_state_notifier_callback;
-	ret = pen_charge_state_notifier_register_client(&ts->pen_charge_state_notifier);
-	if(ret) {
-		NVT_ERR("register pen charge state change notifier failed. ret=%d\n", ret);
-		goto err_register_pen_charge_state_failed;
-	}
-
 #endif
 
 #if defined(CONFIG_DRM_PANEL)
@@ -3377,11 +3340,6 @@ err_register_fb_notif_failed:
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
 	unregister_early_suspend(&ts->early_suspend);
 err_register_early_suspend_failed:
-#endif
-#if defined(NVT_PEN_CONNECT_STRATEGY)
-if (pen_charge_state_notifier_unregister_client(&ts->pen_charge_state_notifier))
-		NVT_ERR("Error occurred while unregistering pen charge state notifier.\n");
-err_register_pen_charge_state_failed:
 #endif
 	mutex_destroy(&ts->pen_switch_lock);
 	destroy_workqueue(ts->set_touchfeature_wq);
@@ -3515,10 +3473,6 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 	nvt_flash_proc_deinit();
 #endif
 
-#if defined(NVT_PEN_CONNECT_STRATEGY)
-	if (pen_charge_state_notifier_unregister_client(&ts->pen_charge_state_notifier))
-		NVT_ERR("Error occurred while unregistering pen status switch state notifier.\n");
-#endif
 	mutex_destroy(&ts->pen_switch_lock);
 	destroy_workqueue(ts->event_wq);
 	ts->event_wq = NULL;
@@ -3624,10 +3578,6 @@ static void nvt_ts_shutdown(struct spi_device *client)
 	nvt_flash_proc_deinit();
 #endif
 
-#if defined(NVT_PEN_CONNECT_STRATEGY)
-	if (pen_charge_state_notifier_unregister_client(&ts->pen_charge_state_notifier))
-		NVT_ERR("Error occurred while unregistering pen status switch state notifier.\n");
-#endif
 	mutex_destroy(&ts->pen_switch_lock);
 	destroy_workqueue(ts->event_wq);
 	ts->event_wq = NULL;
