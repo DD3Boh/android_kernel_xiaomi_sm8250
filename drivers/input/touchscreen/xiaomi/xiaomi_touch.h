@@ -159,9 +159,6 @@ struct xiaomi_touch {
 	struct mutex palm_mutex;
 	struct mutex psensor_mutex;
 	wait_queue_head_t wait_queue;
-#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
-	struct mutex pen_connect_strategy_mutex;
-#endif // CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
 };
 
 struct xiaomi_touch_pdata {
@@ -177,9 +174,6 @@ struct xiaomi_touch_pdata {
 	struct xiaomi_diff_data *diff_data;
 	bool debug_roi_flag;
 #endif
-#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
-	bool pen_active;
-#endif // CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
 };
 
 struct xiaomi_touch *xiaomi_touch_dev_get(int minor);
@@ -193,9 +187,5 @@ extern int update_palm_sensor_value(int value);
 extern int update_p_sensor_value(int value);
 
 int xiaomitouch_register_modedata(struct xiaomi_touch_interface *data);
-
-#ifdef CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
-int update_pen_connect_strategy_value(bool pen_active);
-#endif //CONFIG_TOUCHSCREEN_NEW_PEN_CONNECT_STRATEGY
 
 #endif
