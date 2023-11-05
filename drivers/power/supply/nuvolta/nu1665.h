@@ -38,20 +38,20 @@
 #define RX_MAX_TEMP 84
 
 // interrupts foward definition
-#define RX_INT_LDO_ON                   0x0001
-#define RX_INT_FAST_CHARGE              0x0002
-#define RX_INT_AUTHEN_FINISH            0x0004
-#define RX_INT_RENEGO_DONE              0x0008
-#define RX_INT_ALARM_SUCCESS            0x0010
-#define RX_INT_ALARM_FAIL               0x0020
-#define RX_INT_OOB_GOOD                 0x0040
-#define RX_INT_RPP                      0x0080
-#define RX_INT_TRANSPARENT_SUCCESS      0x0100
-#define RX_INT_TRANSPARENT_FAIL         0x0200
-#define RX_INT_FACTORY_TEST             0x0400
-#define RX_INT_OCP_OTP_ALARM            0x1000
-#define RX_INT_POWER_OFF                0x4000
-#define RX_INT_POWER_ON                 0x8000
+#define RX_INT_LDO_ON 0x0001
+#define RX_INT_FAST_CHARGE 0x0002
+#define RX_INT_AUTHEN_FINISH 0x0004
+#define RX_INT_RENEGO_DONE 0x0008
+#define RX_INT_ALARM_SUCCESS 0x0010
+#define RX_INT_ALARM_FAIL 0x0020
+#define RX_INT_OOB_GOOD 0x0040
+#define RX_INT_RPP 0x0080
+#define RX_INT_TRANSPARENT_SUCCESS 0x0100
+#define RX_INT_TRANSPARENT_FAIL 0x0200
+#define RX_INT_FACTORY_TEST 0x0400
+#define RX_INT_OCP_OTP_ALARM 0x1000
+#define RX_INT_POWER_OFF 0x4000
+#define RX_INT_POWER_ON 0x8000
 
 // interrupts reverse definition
 //#define RTX_INT_CEP_TIMEOUT             0x0004
@@ -62,17 +62,16 @@
 //#define RTX_INT_REVERSE_TEST_DONE       0x0080
 //#define RTX_INT_FOD                     0x0100
 
-#define RTX_INT_EPT                     (1 << 0)
-#define RTX_INT_START_DPING              (1 << 1)
-#define INT_GET_SS						(1 << 2)
-#define INT_GET_ID						(1 << 3)
-#define RTX_INT_GET_CFG                 (1 << 4)
-#define INT_GET_PPP						(1 << 5)
-#define INT_GET_DPING					(1 << 6)
-#define INT_INIT_TX						(1 << 7)
-#define INT_GET_BLE_ADDR				(1 << 8)
-#define FW_VERSION  0x11
-
+#define RTX_INT_EPT (1 << 0)
+#define RTX_INT_START_DPING (1 << 1)
+#define INT_GET_SS (1 << 2)
+#define INT_GET_ID (1 << 3)
+#define RTX_INT_GET_CFG (1 << 4)
+#define INT_GET_PPP (1 << 5)
+#define INT_GET_DPING (1 << 6)
+#define INT_INIT_TX (1 << 7)
+#define INT_GET_BLE_ADDR (1 << 8)
+#define FW_VERSION 0x11
 
 //factory test cmd
 #define FACTORY_TEST_CMD 0x1F
@@ -106,23 +105,23 @@
 #define ABS_CEP_VALUE 1
 #define MAC_LEN 6
 
-#define nuvolta_err(fmt, ...)							\
-do {										\
-	if (log_level >= 0)							\
-		printk(KERN_ERR "[NUVOLTA_1665] " fmt, ##__VA_ARGS__);	\
-} while (0)
+#define nuvolta_err(fmt, ...)                                                  \
+	do {                                                                   \
+		if (log_level >= 0)                                            \
+			printk(KERN_ERR "[NUVOLTA_1665] " fmt, ##__VA_ARGS__); \
+	} while (0)
 
-#define nuvolta_info(fmt, ...)							\
-do {										\
-	if (log_level >= 1)							\
-		printk(KERN_ERR "[NUVOLTA_1665] " fmt, ##__VA_ARGS__);	\
-} while (0)
+#define nuvolta_info(fmt, ...)                                                 \
+	do {                                                                   \
+		if (log_level >= 1)                                            \
+			printk(KERN_ERR "[NUVOLTA_1665] " fmt, ##__VA_ARGS__); \
+	} while (0)
 
-#define nuvolta_dbg(fmt, ...)							\
-do {										\
-	if (log_level >= 2)							\
-		printk(KERN_ERR "[NUVOLTA_1665] " fmt, ##__VA_ARGS__);	\
-} while (0)
+#define nuvolta_dbg(fmt, ...)                                                  \
+	do {                                                                   \
+		if (log_level >= 2)                                            \
+			printk(KERN_ERR "[NUVOLTA_1665] " fmt, ##__VA_ARGS__); \
+	} while (0)
 
 enum FW_UPDATE_CMD {
 	FW_UPDATE_NONE,
@@ -202,63 +201,63 @@ enum wls_adapter_type {
 };
 
 struct nuvolta_1665_chg {
-	struct i2c_client		*client;
-	struct device			*dev;
-	struct regmap			*regmap;
+	struct i2c_client *client;
+	struct device *dev;
+	struct regmap *regmap;
 	// irq and gpio
 	unsigned int tx_on_gpio;
 	unsigned int reverse_boost_gpio;
 	unsigned int irq_gpio;
 	unsigned int power_good_gpio;
 	unsigned int power_good_irq;
-    unsigned int irq;
+	unsigned int irq;
 	unsigned int enable_gpio;
-    unsigned int hall3_irq;
-    unsigned int hall4_irq;
-    unsigned int hall3_gpio;
+	unsigned int hall3_irq;
+	unsigned int hall4_irq;
+	unsigned int hall3_gpio;
 	unsigned int hall4_gpio;
 	int hall3_online;
 	int hall4_online;
 	unsigned long pen_val;
 	void *pen_v;
-    int is_reverse_mode;
+	int is_reverse_mode;
 	int is_boost_mode;
-    int reverse_vout;
+	int reverse_vout;
 	int reverse_iout;
 	int reverse_temp;
-    int reverse_pen_soc;
-    u8 pen_mac_data[6];
+	int reverse_pen_soc;
+	u8 pen_mac_data[6];
 	int power_off_mode;
 	int chip_ok;
 	struct pinctrl *idt_pinctrl;
 	struct pinctrl_state *idt_gpio_active;
 	struct pinctrl_state *idt_gpio_suspend;
 	// delay works
-	struct delayed_work    wireless_int_work;
-	struct delayed_work    wireless_pg_det_work;
-	struct delayed_work    chg_monitor_work;
-	struct delayed_work    reverse_chg_state_work;
-	struct delayed_work    reverse_dping_state_work;
-	struct delayed_work    init_detect_work;
-	struct delayed_work    factory_reverse_start_work;
-	struct delayed_work    factory_reverse_stop_work;
-	struct delayed_work    delay_report_status_work;
-	struct delayed_work    rx_alarm_work;
-	struct delayed_work    rx_enable_usb_work;
-	struct delayed_work    max_power_control_work;
-	struct delayed_work    fw_state_work;
+	struct delayed_work wireless_int_work;
+	struct delayed_work wireless_pg_det_work;
+	struct delayed_work chg_monitor_work;
+	struct delayed_work reverse_chg_state_work;
+	struct delayed_work reverse_dping_state_work;
+	struct delayed_work init_detect_work;
+	struct delayed_work factory_reverse_start_work;
+	struct delayed_work factory_reverse_stop_work;
+	struct delayed_work delay_report_status_work;
+	struct delayed_work rx_alarm_work;
+	struct delayed_work rx_enable_usb_work;
+	struct delayed_work max_power_control_work;
+	struct delayed_work fw_state_work;
 	struct delayed_work hall3_irq_work;
 	struct delayed_work hall4_irq_work;
-    struct delayed_work pen_notifier_work;
-    struct delayed_work reverse_sent_state_work;
-    struct delayed_work reverse_chg_work;
-	struct delayed_work	probe_fw_download_work;
+	struct delayed_work pen_notifier_work;
+	struct delayed_work reverse_sent_state_work;
+	struct delayed_work reverse_chg_work;
+	struct delayed_work probe_fw_download_work;
 	// lock
-	struct mutex    wireless_chg_int_lock;
-    struct mutex    reverse_op_lock;
+	struct mutex wireless_chg_int_lock;
+	struct mutex reverse_op_lock;
 	// alarm
-	struct alarm	reverse_dping_alarm;
-	struct alarm	reverse_chg_alarm;
+	struct alarm reverse_dping_alarm;
+	struct alarm reverse_chg_alarm;
 	//vote
 	struct votable *fcc_votable;
 	struct votable *icl_votable;
@@ -272,7 +271,7 @@ struct nuvolta_1665_chg {
 	struct power_supply *batt_psy;
 	struct power_supply *wireless_psy;
 	struct regulator *pmic_boost;
-    struct power_supply		*nuvo_psy;
+	struct power_supply *nuvo_psy;
 	// driver parameters
 	u8 epp;
 	u8 epp_tx_id_h;
@@ -296,7 +295,7 @@ struct nuvolta_1665_chg {
 	int chg_phase;
 	int is_reverse_chg;
 	bool fw_update;
-    int fw_version;
+	int fw_version;
 	bool is_car_tx;
 	bool is_music_tx;
 	bool is_train_tx;
