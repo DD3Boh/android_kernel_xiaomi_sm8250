@@ -670,11 +670,6 @@ static int nuvolta_1665_set_reverse_chg_mode(struct nuvolta_1665_chg *chip,
 		0,
 	};
 
-	if (enable && (chip->reverse_pen_soc == 255 || chip->reverse_pen_soc == -1)) {
-		nuvolta_info("force disable reverse charging\n");
-		enable = false;
-	}
-
 	chip->wireless_psy = power_supply_get_by_name("wireless");
 	if (!chip->wireless_psy) {
 		nuvolta_err("[idt] no wireless_psy,return\n");
