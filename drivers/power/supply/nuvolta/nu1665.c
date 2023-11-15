@@ -2239,8 +2239,11 @@ static void pen_check_worker(struct work_struct *work)
 
 	bool enable = (chip->reverse_pen_soc != 255 && chip->reverse_pen_soc != -1);
 
-	if (!enable)
+	nuvolta_info("pen_check_worker\n");
+	if (!enable) {
+		nuvolta_info("pen_check_worker run false\n");
 		nuvolta_1665_set_reverse_chg_mode(chip, enable);
+	}
 
 	return;
 }
