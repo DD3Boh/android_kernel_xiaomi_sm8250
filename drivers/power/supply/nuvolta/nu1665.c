@@ -317,25 +317,16 @@ int pen_charge_state_notifier_unregister_client(struct notifier_block *nb)
 }
 EXPORT_SYMBOL(pen_charge_state_notifier_unregister_client);
 
-void pen_charge_state_notifier_call_chain(unsigned long val, void *v)
+void pen_charge_state_notifier_call_chain(unsigned long val, int delay)
 {
 	struct nuvolta_1665_chg *chip = container_of(
 		pen_notifier_work, struct nuvolta_1665_chg, pen_notifier_work);
+
+	chip->pen_v = NULL;
 	chip->pen_val = val;
-	chip->pen_v = v;
-	schedule_delayed_work(&chip->pen_notifier_work, msecs_to_jiffies(0));
+	schedule_delayed_work(&chip->pen_notifier_work, msecs_to_jiffies(delay));
 }
 EXPORT_SYMBOL(pen_charge_state_notifier_call_chain);
-
-static void pen_charge_state_notifier_call_chain_booting(unsigned long val,
-							 void *v)
-{
-	struct nuvolta_1665_chg *chip = container_of(
-		pen_notifier_work, struct nuvolta_1665_chg, pen_notifier_work);
-	chip->pen_val = val;
-	chip->pen_v = v;
-	schedule_delayed_work(&chip->pen_notifier_work, msecs_to_jiffies(2000));
-}
 
 static int rx1665_read(struct nuvolta_1665_chg *chip, u8 *val, u16 addr)
 {
@@ -3392,11 +3383,11 @@ static irqreturn_t nuvolta_1665_hall3_irq_handler(int irq, void *dev_id)
 		if (gpio_get_value(chip->hall3_gpio)) {
 			nuvolta_err("hall3_irq_handler: pen detach\n");
 			chip->hall3_online = 0;
-			pen_charge_state_notifier_call_chain(0, NULL);
+			pen_charge_state_notifier_call_chain(0, 0);
 			if (chip->hall4_online) {
 				nuvolta_err(
 					"hall3_irq_handler: hall4 online, return\n");
-				pen_charge_state_notifier_call_chain(1, NULL);
+				pen_charge_state_notifier_call_chain(1, 0);
 				return IRQ_HANDLED;
 			}
 			schedule_delayed_work(&chip->hall3_irq_work,
@@ -3405,7 +3396,7 @@ static irqreturn_t nuvolta_1665_hall3_irq_handler(int irq, void *dev_id)
 		} else {
 			nuvolta_err("hall3_irq_handler: pen attach\n");
 			chip->hall3_online = 1;
-			pen_charge_state_notifier_call_chain(1, NULL);
+			pen_charge_state_notifier_call_chain(1, 0);
 		}
 	}
 
@@ -3428,11 +3419,11 @@ static irqreturn_t nuvolta_1665_hall4_irq_handler(int irq, void *dev_id)
 		if (gpio_get_value(chip->hall4_gpio)) {
 			nuvolta_err("hall4_irq_handler: pen detach\n");
 			chip->hall4_online = 0;
-			pen_charge_state_notifier_call_chain(0, NULL);
+			pen_charge_state_notifier_call_chain(0, 0);
 			if (chip->hall3_online) {
 				nuvolta_err(
 					"hall4_irq_handler: hall3 online, return\n");
-				pen_charge_state_notifier_call_chain(1, NULL);
+				pen_charge_state_notifier_call_chain(1, 0);
 				return IRQ_HANDLED;
 			}
 			schedule_delayed_work(&chip->hall4_irq_work,
@@ -3441,7 +3432,7 @@ static irqreturn_t nuvolta_1665_hall4_irq_handler(int irq, void *dev_id)
 		} else {
 			nuvolta_err("hall4_irq_handler: pen attach\n");
 			chip->hall4_online = 1;
-			pen_charge_state_notifier_call_chain(1, NULL);
+			pen_charge_state_notifier_call_chain(1, 0);
 		}
 	}
 
@@ -5208,7 +5199,7 @@ static int nuvolta_1665_probe(struct i2c_client *client,
 		if (!hall3_val) {
 			nuvolta_info("pen online, start reverse charge\n");
 			chip->hall3_online = 1;
-			pen_charge_state_notifier_call_chain_booting(1, NULL);
+			pen_charge_state_notifier_call_chain(1, 2000);
 			schedule_delayed_work(&chip->hall3_irq_work,
 					      msecs_to_jiffies(6000));
 		}
@@ -5220,7 +5211,7 @@ static int nuvolta_1665_probe(struct i2c_client *client,
 		if (!hall4_val) {
 			nuvolta_info("pen online, start reverse charge\n");
 			chip->hall4_online = 1;
-			pen_charge_state_notifier_call_chain_booting(1, NULL);
+			pen_charge_state_notifier_call_chain(1, 2000);
 			schedule_delayed_work(&chip->hall4_irq_work,
 					      msecs_to_jiffies(6000));
 		}
