@@ -2237,7 +2237,7 @@ static void pen_check_worker(struct work_struct *work)
 	struct nuvolta_1665_chg *chip = container_of(work,
 			struct nuvolta_1665_chg, pen_check_work.work);
 
-	bool enable = (chip->reverse_pen_soc != 255 && chip->reverse_pen_soc != -1);
+	bool enable = (chip->reverse_pen_soc >= 0 && chip->reverse_pen_soc <= 100);
 
 	nuvolta_info("pen_check_worker\n");
 	if (!enable) {
