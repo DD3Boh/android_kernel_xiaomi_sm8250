@@ -165,7 +165,10 @@ struct nvt_ts_data {
 	struct delayed_work nvt_lockdown_work;
 	int db_wakeup;
 #if defined(NVT_PEN_CONNECT_STRATEGY)
+	struct work_struct pen_charge_state_change_work;
+	struct notifier_block pen_charge_state_notifier;
 	bool pen_bluetooth_connect;
+	bool pen_charge_connect;
 	bool game_mode_enable;
 	struct device *dev;
 #endif
