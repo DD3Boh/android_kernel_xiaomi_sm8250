@@ -699,7 +699,6 @@ static int nuvolta_1665_set_reverse_chg_mode(struct nuvolta_1665_chg *chip,
 				&chip->reverse_dping_alarm,
 				ms_to_ktime(REVERSE_DPING_CHECK_DELAY_MS));
 		}
-		schedule_delayed_work(&chip->pen_check_work, msecs_to_jiffies(3000));
 
 	} else {
 		chip->is_boost_mode = 0;
@@ -734,9 +733,9 @@ static int nuvolta_1665_set_reverse_chg_mode(struct nuvolta_1665_chg *chip,
 		if (rc < 0)
 			nuvolta_err("Couldn't cancel reverse_chg_alarm\n");
 		pm_relax(chip->dev);
-
-		pen_charge_state_notifier_call_chain(0);
 	}
+
+	schedule_delayed_work(&chip->pen_check_work, msecs_to_jiffies(3000));
 
 out:
 	return 0;
@@ -2232,10 +2231,12 @@ static void pen_check_worker(struct work_struct *work)
 
 	bool enable = (chip->reverse_pen_soc >= 0 && chip->reverse_pen_soc <= 100);
 
-	pen_charge_state_notifier_call_chain(enable);
-
 	nuvolta_info("pen_check_worker\n");
-	if (!enable) {
+
+	if (chip->reverse_chg_en != enable) {
+		nuvolta_info("pen_check_worker notifier chain run\n");
+		pen_charge_state_notifier_call_chain(enable);
+
 		nuvolta_info("pen_check_worker run false\n");
 		nuvolta_1665_set_reverse_chg_mode(chip, enable);
 	}
