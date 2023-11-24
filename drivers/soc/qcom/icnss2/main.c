@@ -3623,8 +3623,9 @@ static inline void icnss_runtime_pm_deinit(struct icnss_priv *priv)
 
 static inline bool icnss_use_nv_mac(struct icnss_priv *priv)
 {
-	return of_property_read_bool(priv->pdev->dev.of_node,
-				     "use-nv-mac");
+	/*return of_property_read_bool(priv->pdev->dev.of_node,
+				     "use-nv-mac");*/
+	return true;
 }
 
 static int icnss_probe(struct platform_device *pdev)
